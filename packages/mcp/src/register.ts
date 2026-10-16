@@ -13,6 +13,8 @@ import type {
   ResourceHandler,
   ResourceOpts,
   StandardSchemaV1,
+  ToolContext,
+  ToolDef,
   ToolHandler,
   ToolOpts,
 } from "./types.ts";
@@ -23,8 +25,31 @@ export function tool<Schema extends StandardSchemaV1, Out extends StandardSchema
   schema: Schema,
   handler: ToolHandler<Schema>,
   opts?: ToolOpts<Out>,
+): Server;
+// Descriptor-driven overload: one ToolDef can feed both this registration
+// and `client.call(def, args)` on the other end of the wire.
+export function tool<I, O>(
+  server: Server,
+  def: ToolDef<I, O> & { input: StandardSchemaV1 },
+  handler: (input: I, ctx: ToolContext) => unknown,
+  opts?: ToolOpts,
+): Server;
+export function tool(
+  server: Server,
+  nameOrDef: string | (ToolDef<unknown, unknown> & { input: StandardSchemaV1 }),
+  schemaOrHandler: unknown,
+  handlerOrOpts: unknown,
+  opts?: ToolOpts<StandardSchemaV1 | null>,
 ): Server {
-  server.tool(name, schema, handler, opts);
+  if (typeof nameOrDef === "string") {
+    server.tool(nameOrDef, schemaOrHandler as StandardSchemaV1, handlerOrOpts as ToolHandler, opts);
+    return server;
+  }
+  server.toolDef(
+    nameOrDef,
+    schemaOrHandler as (input: unknown, ctx: ToolContext) => unknown,
+    handlerOrOpts === undefined ? undefined : (handlerOrOpts as ToolOpts<StandardSchemaV1 | null>),
+  );
   return server;
 }
 

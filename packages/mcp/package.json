@@ -20,6 +20,10 @@
       "types": "./dist/esm/index.d.ts",
       "import": "./dist/esm/index.js"
     },
+    "./client": {
+      "types": "./dist/esm/client/index.d.ts",
+      "import": "./dist/esm/client/index.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

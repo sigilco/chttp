@@ -14,3 +14,13 @@
 - `scriptc coverage packages/mcp/gate.ts` must stay 100% — `scripts/scriptc-gate.sh` is the gate.
 - `pnpm --filter @chttp/mcp test` runs the node:test suite against the tsc build (`test/*.test.js`); `bash test/elf.test.sh` builds + runs the ELF smoke.
 - Handlers are async-only (`T | Promise<T>` return unions are SC2009); transport push is `Promise<void>` for the same reason.
+
+Client authoring traps (learned while shipping `./client`):
+
+- **Absent-key reads on `{[k: string]: string}` records abort at runtime** ("typed slot — no undefined is representable"). Read-only header tables must be `{[k: string]: unknown}` and probed with `typeof === "string"`; unknown-valued records return a probeable `undefined`.
+- **Class instances can't cross module boundaries** — `HttpResponse` is a plain `interface` record, not a class; field reads AND method calls on a class returned from another module are refused.
+- **Async methods can't override base-class methods** (SC1090 — the vtable can't spawn fibers). Overrides must be non-async and delegate to a private `async _x`.
+- **`net.Server#address()` has no lowering** (its `string | AddressInfo | null` union); `.removeAllListeners`/`unref` aren't lowered either. In ELF smoke code, bind a fixed port and walk forward on `EADDRINUSE` via `once("error")`.
+- **`AbortController`/`AbortSignal` class fields degrade to `unknown`** — store the cancel as a `() => void` field and close over the controller.
+- **Record-shape casts into named interfaces are SC2002** — rebuild `CallToolResult`-style outputs field-by-field instead of `(rec as CallToolResult)`.
+- **Notification POSTs return 202 with an empty body** — skip `JSON.parse` for id-less envelopes or the client dies on "Unexpected end of JSON input".

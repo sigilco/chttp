@@ -41,6 +41,7 @@ import type {
   ServerOpts,
   StandardSchemaV1,
   ToolContext,
+  ToolDef,
   ToolHandler,
   ToolOpts,
 } from "./types.ts";
@@ -214,6 +215,47 @@ export class Server {
     // erased `=> unknown` shape the slot actually invokes.
     this._pushToolHandler(handler as unknown as ToolFn);
     return this;
+  }
+
+  // Descriptor-driven registration: the same ToolDef the client calls
+  // through can register the tool here, keeping name/schemas consistent
+  // across the wire. `def.input` is required (a no-args tool's def simply
+  // omits it — give the descriptor an empty-object schema to register).
+  // `def.output` fills opts.outputSchema unless already set.
+  toolDef<I, O>(
+    def: ToolDef<I, O> & { input: StandardSchemaV1 },
+    handler: (input: I, ctx: ToolContext) => unknown,
+    opts?: ToolOpts<StandardSchemaV1 | null>,
+  ): this {
+    const o: ToolOpts<StandardSchemaV1 | null> = {};
+    if (opts !== undefined && opts.description !== undefined) {
+      o.description = opts.description;
+    }
+    if (opts !== undefined && opts.emit !== undefined && opts.emit !== null) {
+      o.emit = opts.emit;
+    }
+    const optOut: StandardSchemaV1 | null =
+      opts !== undefined && opts.outputSchema !== undefined && opts.outputSchema !== null
+        ? opts.outputSchema
+        : null;
+    const outSchema: StandardSchemaV1 | null =
+      def.output !== undefined && def.output !== null ? def.output : optOut;
+    if (outSchema !== null) {
+      o.outputSchema = outSchema;
+    }
+    // Passing `handler` to the non-generic _toolDefSlot param records the
+    // erased `=> unknown` signature; a cast alone would not (see tool()).
+    this._toolDefSlot(def.name, def.input, handler as unknown as ToolFn, o);
+    return this;
+  }
+
+  _toolDefSlot(
+    name: string,
+    schema: StandardSchemaV1,
+    handler: ToolFn,
+    o: ToolOpts<StandardSchemaV1 | null>,
+  ): this {
+    return this.tool(name, schema, handler, o);
   }
 
   _pushToolHandler(h: ToolFn): void {
