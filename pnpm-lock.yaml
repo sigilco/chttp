@@ -293,6 +293,19 @@ importers:
         specifier: '>=0.3.2'
         version: 0.3.3
 
+  examples/integrations/mcp-stdio:
+    dependencies:
+      '@chttp/mcp':
+        specifier: workspace:*
+        version: link:../../../packages/mcp
+      '@chttp/val':
+        specifier: workspace:*
+        version: link:../../../packages/val
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.19.2
+
   examples/integrations/otlp-traces:
     dependencies:
       '@chttp/router':
@@ -390,6 +403,30 @@ importers:
         specifier: ^7.0.0
         version: 7.3.7(@types/node@24.19.2)(yaml@2.9.1)
 
+  packages/auth:
+    devDependencies:
+      '@chttp/router':
+        specifier: workspace:^
+        version: link:../router
+      '@chttp/val':
+        specifier: workspace:^
+        version: link:../val
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.19.2
+      jose:
+        specifier: ^6.0.0
+        version: 6.2.12
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      valibot:
+        specifier: ^1.5.0
+        version: 1.5.0(typescript@5.9.3)
+
   packages/html:
     devDependencies:
       '@types/node':
@@ -398,6 +435,30 @@ importers:
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+
+  packages/mcp:
+    devDependencies:
+      '@chttp/router':
+        specifier: workspace:^
+        version: link:../router
+      '@chttp/val':
+        specifier: workspace:^
+        version: link:../val
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.19.2
+      '@valibot/to-json-schema':
+        specifier: ^1.8.0
+        version: 1.8.0(valibot@1.5.0(typescript@5.9.3))
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      valibot:
+        specifier: ^1.5.0
+        version: 1.5.0(typescript@5.9.3)
 
   packages/router:
     devDependencies:
@@ -1480,6 +1541,9 @@ packages:
   '@speed-highlight/core@1.2.24':
     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
 
+  '@standard-schema/spec@1.1.0':
+    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
   '@types/aws-lambda@8.10.164':
     resolution: {integrity: sha512-XOnrazWcOd6yWPnR7DxqCBPPYciDjHq+NN8LPwwqBCJNXLyPJgKo47fZpJ113+oyAn9Zti0Cf6H4k6yPcE3WFg==}
 
@@ -1533,6 +1597,11 @@ packages:
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [win32]
+
+  '@valibot/to-json-schema@1.8.0':
+    resolution: {integrity: sha512-a0M+uwCuQZEPAo65NYkFSJ14O5c213KoSZmPdoCfuFvUhfULi4T2Z6Tpjv6lTVMW9RoLm74RpRAjNEa43KcN+g==}
+    peerDependencies:
+      valibot: ^1.5.0
 
   abstract-logging@2.0.1:
     resolution: {integrity: sha512-2BjRTZxTPvheOvGbBslFSYOUkr+SjPtOnrLP33f+VIWLzezQpZcqVg7ja3L4dBXmzzgwT+a029jRx5PCi3JuiA==}
@@ -1900,6 +1969,9 @@ packages:
 
   is-promise@4.0.0:
     resolution: {integrity: sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ==}
+
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
 
   json-schema-ref-resolver@3.0.1:
     resolution: {integrity: sha512-w+HwgljXpVwZ3IidoUR1qPZxSOQ+NRQWuVe6a5pe8XbHsNZE4UAwVPUvzZagn7yBKbJtt6UJnRFYbNTRPZI45Q==}
@@ -3165,6 +3237,8 @@ snapshots:
 
   '@speed-highlight/core@1.2.24': {}
 
+  '@standard-schema/spec@1.1.0': {}
+
   '@types/aws-lambda@8.10.164': {}
 
   '@types/estree@1.0.9': {}
@@ -3195,6 +3269,10 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.1.0-dev.20261016.1':
     optional: true
+
+  '@valibot/to-json-schema@1.8.0(valibot@1.5.0(typescript@5.9.3))':
+    dependencies:
+      valibot: 1.5.0(typescript@5.9.3)
 
   abstract-logging@2.0.1: {}
 
@@ -3622,6 +3700,8 @@ snapshots:
   is-fullwidth-code-point@3.0.0: {}
 
   is-promise@4.0.0: {}
+
+  jose@6.2.12: {}
 
   json-schema-ref-resolver@3.0.1:
     dependencies:

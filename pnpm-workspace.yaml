@@ -24,6 +24,7 @@ versioning:
     - chttp-example-aws-lambda
     - chttp-example-cloudflare-workers
     - chttp-example-hono-middleware
+    - chttp-example-mcp-stdio
     - chttp-example-logging-file-audit
     - chttp-example-otlp-traces
     - chttp-example-prometheus-metrics
@@ -33,6 +34,6 @@ versioning:
     - chttp-example-ws-echo
     - chttp-vite-fixture
   fixed:
-    - ["@chttp/router", "@chttp/val", "@chttp/unplugin", "@chttp/static", "@chttp/ws", "@chttp/stream", "@chttp/html"]
+    - ["@chttp/router", "@chttp/val", "@chttp/unplugin", "@chttp/static", "@chttp/ws", "@chttp/stream", "@chttp/html", "@chttp/auth", "@chttp/mcp"]
   changelog:
     storage: repository

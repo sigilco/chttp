@@ -13,6 +13,8 @@ GATES=(
   bench/apps/chttp-val.ts
   bench/apps/chttp-multipart.ts
   packages/static/gate.ts
+  packages/auth/gate.ts
+  packages/mcp/gate.ts
 )
 
 fail=0

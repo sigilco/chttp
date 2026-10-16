@@ -1,0 +1,60 @@
+{
+  "name": "@chttp/auth",
+  "version": "0.3.0",
+  "description": "Session, password, JWT, OAuth2+PKCE, CSRF and TOTP primitives over node:crypto, authored inside the scriptc compilable subset",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sigilco/chttp.git",
+    "directory": "packages/auth"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "main": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/*.test.js test/*.test.mjs && bash test/elf.test.sh"
+  },
+  "devDependencies": {
+    "@chttp/router": "workspace:^",
+    "@chttp/val": "workspace:^",
+    "@standard-schema/spec": "^1.1.0",
+    "@types/node": "^24.0.0",
+    "jose": "^6.0.0",
+    "typescript": "^5.9.0",
+    "valibot": "^1.5.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "author": "Joaquin Terrasa & contributors",
+  "keywords": [
+    "auth",
+    "session",
+    "jwt",
+    "oauth2",
+    "pkce",
+    "csrf",
+    "totp",
+    "scrypt",
+    "scriptc",
+    "native"
+  ],
+  "homepage": "https://github.com/sigilco/chttp/tree/main/packages/auth#readme",
+  "bugs": {
+    "url": "https://github.com/sigilco/chttp/issues"
+  },
+  "sideEffects": false
+}
