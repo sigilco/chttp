@@ -33,12 +33,17 @@
       "import": "./dist/esm/index.js"
     },
     "./src/index.ts": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./dist/esm/client.d.ts",
+      "import": "./dist/esm/client.js"
+    },
+    "./src/client.ts": "./src/client.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test test/router.test.js test/server.test.js test/async.test.js test/upgrade.test.js test/fetch-passthrough.test.js"
+    "test": "npm run build && node --test test/router.test.js test/server.test.js test/async.test.js test/upgrade.test.js test/fetch-passthrough.test.js test/client.test.js && bash test/elf.test.sh"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
