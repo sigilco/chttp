@@ -1,136 +1,136 @@
 {
-  "title": "chttp Documentation",
-  "url": "https://chttpjs.pages.dev/",
-  "src": ".",
-  "out": "site",
-  "theme": {
-    "primary": "#2f6f4f"
-  },
-  "plugins": {
-    "ai": false
-  },
-  "navigation": [
+ "title": "chttp Documentation",
+ "url": "https://chttpjs.pages.dev/",
+ "src": ".",
+ "out": "site",
+ "theme": {
+  "primary": "#2f6f4f"
+ },
+ "plugins": {
+  "ai": false
+ },
+ "navigation": [
+  {
+   "title": "Concepts",
+   "collapsible": true,
+   "children": [
     {
-      "title": "Concepts",
-      "collapsible": true,
-      "children": [
-        {
-          "title": "What is chttp",
-          "path": "/"
-        }
-      ]
-    },
-    {
-      "title": "Getting Started",
-      "collapsible": true,
-      "children": [
-        {
-          "title": "Quickstart",
-          "path": "/quickstart"
-        },
-        {
-          "title": "Run targets",
-          "path": "/targets"
-        },
-        {
-          "title": "Deploy",
-          "path": "/deploy"
-        },
-        {
-          "title": "Benchmarks",
-          "path": "/benchmarks"
-        }
-      ]
-    },
-    {
-      "title": "API",
-      "collapsible": true,
-      "children": [
-        {
-          "title": "Routing",
-          "path": "/routing"
-        },
-        {
-          "title": "Context",
-          "path": "/context"
-        },
-        {
-          "title": "Errors",
-          "path": "/errors"
-        },
-        {
-          "title": "Typed client",
-          "path": "/client"
-        }
-      ]
-    },
-    {
-      "title": "Guides",
-      "collapsible": true,
-      "children": [
-        {
-          "title": "Examples",
-          "path": "/examples"
-        }
-      ]
-    },
-    {
-      "title": "Helpers",
-      "collapsible": true,
-      "children": [
-        {
-          "title": "Static files",
-          "path": "/static"
-        },
-        {
-          "title": "Streaming and SSE",
-          "path": "/streaming"
-        },
-        {
-          "title": "WebSocket",
-          "path": "/websocket"
-        },
-        {
-          "title": "Multipart uploads",
-          "path": "/multipart"
-        },
-        {
-          "title": "Validation",
-          "path": "/validation"
-        },
-        {
-          "title": "HTML rendering",
-          "path": "/html"
-        },
-        {
-          "title": "Route lowering plugin",
-          "path": "/unplugin"
-        },
-        {
-          "title": "Native FFI",
-          "path": "/native"
-        }
-      ]
-    },
-    {
-      "title": "Middleware",
-      "collapsible": true,
-      "children": [
-        {
-          "title": "Middleware",
-          "path": "/middleware"
-        }
-      ]
-    },
-    {
-      "title": "Coding Agents",
-      "collapsible": true,
-      "children": [
-        {
-          "title": "Coding agents",
-          "path": "/architecture"
-        }
-      ]
+     "title": "What is chttp",
+     "path": "/"
     }
-  ]
+   ]
+  },
+  {
+   "title": "Getting Started",
+   "collapsible": true,
+   "children": [
+    {
+     "title": "Quickstart",
+     "path": "/quickstart"
+    },
+    {
+     "title": "Run targets",
+     "path": "/targets"
+    },
+    {
+     "title": "Deploy",
+     "path": "/deploy"
+    },
+    {
+     "title": "Benchmarks",
+     "path": "/benchmarks"
+    }
+   ]
+  },
+  {
+   "title": "API",
+   "collapsible": true,
+   "children": [
+    {
+     "title": "Routing",
+     "path": "/routing"
+    },
+    {
+     "title": "Context",
+     "path": "/context"
+    },
+    {
+     "title": "Errors",
+     "path": "/errors"
+    },
+    {
+     "title": "Typed client",
+     "path": "/client"
+    }
+   ]
+  },
+  {
+   "title": "Guides",
+   "collapsible": true,
+   "children": [
+    {
+     "title": "Examples",
+     "path": "/examples"
+    }
+   ]
+  },
+  {
+   "title": "Helpers",
+   "collapsible": true,
+   "children": [
+    {
+     "title": "Static files",
+     "path": "/static"
+    },
+    {
+     "title": "Streaming and SSE",
+     "path": "/streaming"
+    },
+    {
+     "title": "WebSocket",
+     "path": "/websocket"
+    },
+    {
+     "title": "Multipart uploads",
+     "path": "/multipart"
+    },
+    {
+     "title": "Validation",
+     "path": "/validation"
+    },
+    {
+     "title": "HTML rendering",
+     "path": "/html"
+    },
+    {
+     "title": "Route lowering plugin",
+     "path": "/unplugin"
+    },
+    {
+     "title": "Native FFI",
+     "path": "/native"
+    }
+   ]
+  },
+  {
+   "title": "Middleware",
+   "collapsible": true,
+   "children": [
+    {
+     "title": "Middleware",
+     "path": "/middleware"
+    }
+   ]
+  },
+  {
+   "title": "Coding Agents",
+   "collapsible": true,
+   "children": [
+    {
+     "title": "Coding agents",
+     "path": "/architecture"
+    }
+   ]
+  }
+ ]
 }
