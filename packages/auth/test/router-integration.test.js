@@ -87,11 +87,10 @@ test("node:http transport: login -> protected -> logout", async () => {
 test("app.fetch transport: identical flow through Web Standards Request", async (t) => {
   const store = new MemorySessionStore();
   const app = buildApp(store);
-  // app.fetch (the PR #56 Web Standards surface) is not in @chttp/router
-  // 0.2.1 — skip until a release ships it; the guard activates the test
-  // automatically when it lands.
+  // Guard for consumers still on a router without the fetch surface;
+  // @chttp/router >= 0.3.0 always runs this arm.
   if (typeof app.fetch !== "function") {
-    t.skip("app.fetch not in published @chttp/router yet");
+    t.skip("app.fetch not available on this @chttp/router");
     return;
   }
 
