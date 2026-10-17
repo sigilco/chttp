@@ -21,6 +21,34 @@
 
 import * as http from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
+
+// WebReqView is the fetch-path view of the original Web Request. WHATWG
+// Request/Response are host objects scriptc refuses to lower as class field
+// types (SC1090 fires even on `Request | null` and `unknown | null` —
+// verified on 0.3.4), but an interface with the members we actually read
+// lowers at 100% static, and a real Request assigns to it structurally. The
+// field stays null on the Node arm, where `_raw` keeps the IncomingMessage.
+export interface WebReqView {
+  method: string;
+  url: string;
+  headers: Headers;
+  body: ReadableStream<Uint8Array> | null;
+  // Body readers used by declaration-driven buffering: `{ body: true }`
+  // routes read via text() inside _dispatchPrim; multipart routes went
+  // through arrayBuffer() in app.fetch before dispatch.
+  text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+// ResView is the adoption-time view of a handler-returned Response: the
+// settled value cast through a field-check record into the three members
+// finalization needs. Same subset rationale as WebReqView — `Response | null`
+// as a field type is SC1090; the interface view is not.
+export interface ResView {
+  status: number;
+  body: ReadableStream<Uint8Array> | null;
+  headers: Headers;
+}
 import { GenDispatch, ROUTE_CONTRACT_VERSION } from "./gen.ts";
 import type { DispatchFn } from "./gen.ts";
 import { UpgradeDispatch } from "./upgrade.ts";
@@ -98,7 +126,15 @@ function copyHeadersDistinct(src: unknown): Record<string, string[]> {
 }
 
 export class ReqViewCore {
-  raw: IncomingMessage | null;
+  // Node arm: the live IncomingMessage. Fetch arm: null. The `raw` name is
+  // taken by the Hono-parity getter below (c.req.raw), so the storage field
+  // is underscore-prefixed like the other deferred members.
+  _raw: IncomingMessage | null;
+  // The fetch arm's original Web Request, typed through the WebReqView
+  // interface (see the interface note above for why not `Request | null`).
+  // null on the Node arm. `rawReq()` is the Hono-parity accessor: whichever
+  // object the host handed in, returned untouched.
+  _web: WebReqView | null;
   // _headers is the materialized headers table the router reads. The
   // Node path copies from `raw.headers`; the app.fetch path copies from
   // the captured Web Request's Headers. Reading from a Record instead
@@ -152,19 +188,23 @@ export class ReqViewCore {
     // `raw === null` is the app.fetch arm: no IncomingMessage exists, so
     // method/headers arrive through the stub args and `raw` stays null
     // (the sanctioned `| null` union — a record arm in a union type is
-    // not representable under scriptc). `c.req.raw` is therefore null on
-    // the fetch path; Node callers always see the real IncomingMessage.
+    // not representable under scriptc). The Web Request itself is captured
+    // separately by app.fetch via `_setWeb` after construction, so
+    // `c.req.raw` (rawReq()) returns it there; Node callers see the real
+    // IncomingMessage from this field.
     if (raw === null) {
-      this.raw = null;
+      this._raw = null;
+      this._web = null;
       this.method = String(method || "");
       this._headers = headers === undefined ? {} : headers;
       this._headersDistinct = headersDistinct === undefined ? {} : headersDistinct;
       this.url = url === undefined ? path : String(url);
     } else {
-      this.raw = raw;
+      this._raw = raw;
+      this._web = null;
       this.method = String(raw.method || "");
       // Copy the headers table. The raw object stays around for
-      // c.req.raw access (legacy); _headers is what header() actually
+      // c.req.raw access (Node arm); _headers is what header() actually
       // reads. The copy is O(headers) once per request, same as the
       // old code path, but it lets the fetch surface build the table
       // from a Web Request without an IncomingMessage fake.
@@ -193,6 +233,39 @@ export class ReqViewCore {
     this._mpFiles = [];
     this._mpFields = [];
     this.path = String(path);
+  }
+
+  // Hono-parity accessor: `c.req.raw`. Returns the host's request object —
+  // the IncomingMessage on the Node arm, the original Web Request on the
+  // fetch arm (captured via _setWeb before the chain runs). Typed as `any` on
+  // the runtime class to avoid scriptc SC9001 ICE on non-discriminated union
+  // prototype lowering; narrowed to `IncomingMessage | WebReqView` on the
+  // exported `ReqView` interface below.
+  get raw(): any {
+    return this.rawReq();
+  }
+
+  // The request object the host handed in, untouched: the IncomingMessage on
+  // the Node arm, the original Web Request on the fetch arm (set by
+  // app.fetch right after construction, before the chain runs). Hono
+  // middleware shapes — bodyLimit, methodOverride, sub-request
+  // `fetch(c.req.raw)` — read this; it was null on the fetch arm before
+  // 0.4.0, which made those middlewares unusable there.
+  rawReq(): any {
+    const w = this._web;
+    if (w !== null) {
+      return w;
+    }
+    return this._raw;
+  }
+
+  // Fetch-path capture. Takes the interface view (a real Request satisfies
+  // it structurally) and keeps the object alive for c.req.raw reads. The
+  // Request's body stream is NOT consumed here — lazy bodies are the
+  // contract: undeclared routes get `_body === ""` while the stream stays
+  // readable through rawReq().
+  _setWeb(r: WebReqView | null): void {
+    this._web = r;
   }
 
   // param() takes `string`, not ParamKey<P>: conditional types never
@@ -548,7 +621,10 @@ export class CtxCore {
 // the concrete Core classes.
 export interface Ctx<P extends string = string> extends CtxCore {}
 export const Ctx = CtxCore;
-export interface ReqView<P extends string = string> extends ReqViewCore {}
+export interface ReqView<P extends string = string> extends ReqViewCore {
+  readonly raw: IncomingMessage | WebReqView;
+  rawReq(): IncomingMessage | WebReqView;
+}
 export const ReqView = ReqViewCore;
 
 // Param names inferred from a path literal: '/user/:id' -> 'id',
@@ -1588,11 +1664,21 @@ export class App {
   // (validated by examples/integrations/hono-middleware/). Returns a
   // Promise<Response> that resolves once the sink has finished writing.
   //
-  // The body is read once via `await req.text()` so `c.req.body()` works
-  // identically to the Node path. The Request is captured into
-  // ReqView._webRaw so middlewares that need spec-compliant access
-  // (bodyLimit, methodOverride, sub-request `fetch(c.req.raw)`) can use
-  // it. Generated dispatch (contracts/route-contract.md) is still
+  // Bodies are read lazily, mirroring the Node path's declaration-driven
+  // buffering: only routes that declared `{ body: true }` (or multipart
+  // opts) get `req.text()`/`req.arrayBuffer()` run before the chain.
+  // Undeclared routes see `c.req.body() === ""` and read the original
+  // Request's unconsumed stream via `c.req.raw` — a 0.4.0 behavior change
+  // (0.3 buffered everything). The Request itself is captured into the
+  // ReqView (`c.req.raw` returns it) so middleware that needs
+  // spec-compliant access (bodyLimit, methodOverride, sub-request
+  // `fetch(c.req.raw)`) works on the fetch arm.
+  //
+  // Handler-returned Response objects are adopted at finalization: a
+  // handler may either write through `c.*` or return a Response (Hono
+  // accepts both); see adoptResponse in the chain runner.
+  //
+  // Generated dispatch (contracts/route-contract.md) is still
   // Node-shaped: a synthesized ServerResponse is constructed from the
   // FetchResponseSink and passed to the dispatcher. When the dispatcher
   // writes to it, the writes are mirrored into the FetchResponseSink via
@@ -1608,28 +1694,24 @@ export class App {
     const method = String(req.method);
     const sink = new FetchResponseSink();
     return (async function (): Promise<Response> {
-      // Buffer the body once so c.req.body() works identically to the
-      // Node path. GET/HEAD never have a body.
-      // Multipart-declared routes need byte-exact content: read the body
-      // as an ArrayBuffer (req.text() would mangle binary file bytes
-      // through utf8 decoding). Everything else keeps the string body.
+      // Pre-read the body ONLY for multipart-declared routes (byte-exact
+      // content: req.text() would mangle binary file bytes through utf8
+      // decoding). Everything else stays lazy: the matched route's bodyFlag
+      // decides inside _dispatchPrim whether to buffer, and undeclared
+      // routes keep the Request's stream untouched for c.req.raw readers.
       const ctH = req.headers.get("content-type");
       const isMp = ctH !== null && String(ctH).toLowerCase().indexOf("multipart/form-data") === 0;
       let body = "";
       let bodyU8: Uint8Array | null = null;
-      if (method !== "GET" && method !== "HEAD") {
-        if (isMp) {
-          bodyU8 = new Uint8Array(await req.arrayBuffer());
-        } else {
-          body = await req.text();
-        }
+      if (isMp && method !== "GET" && method !== "HEAD") {
+        bodyU8 = new Uint8Array(await req.arrayBuffer());
       }
       // Generated dispatch is Node-shaped (contracts/route-contract.md) —
       // the contract has no Web Standards variant yet (follow-up A in the
       // plan). For the fetch path we skip generated dispatch entirely;
       // the unplugin-emitted routes would need a parallel contract. Today
       // no shipped example uses generated dispatch through app.fetch.
-      await app._dispatchPrim(method, url, headersFromRaw(req), body, bodyU8, sink);
+      await app._dispatchPrim(method, url, headersFromRaw(req), req, body, bodyU8, sink);
       return sink.toResponse();
     })();
   }
@@ -1666,7 +1748,7 @@ export class App {
     const sink = new FetchResponseSink();
     const m = String(method).toUpperCase();
     const seeded = m === "GET" || m === "HEAD" ? "" : String(body);
-    const p = app._dispatchPrim(String(method), String(url), headers, seeded, null, sink);
+    const p = app._dispatchPrim(String(method), String(url), headers, null, seeded, null, sink);
     p.then(function (): void {
       respond(sink.status, sink.hdrList, sink.chunks.join(""));
     });
@@ -1674,13 +1756,22 @@ export class App {
 
   // Internal: the shared dispatch primitive that drives both app.handler
   // (Node) and app.fetch (Web Standards). Takes normalized primitives
-  // (method, url, an optional raw Web Request, an already-buffered body
-  // string) plus the destination sink. Returns a Promise so app.fetch
-  // can await it.
-  _dispatchPrim(
+  // (method, url, an optional header table, the optional Web Request being
+  // dispatched, an optional pre-buffered body — set only for multipart
+  // routes and fetchShim's seeded string — and the destination sink).
+  // Returns a Promise so app.fetch can await it.
+  //
+  // Lazy bodies (0.4.0): when `body` arrives empty and the matched route
+  // declared `{ body: true }`, the body is buffered HERE from the captured
+  // Request's stream (the fetch arm's analogue of the Node path's
+  // data/end buffering in _dispatch). Undeclared routes skip the read:
+  // `c.req.body()` stays "" and the Request's stream passes through
+  // unconsumed for c.req.raw readers.
+  async _dispatchPrim(
     method: string,
     url: string,
     webHeaders: Record<string, string> | null,
+    webReq: WebReqView | null,
     body: string,
     bodyU8: Uint8Array | null,
     sink: ResponseSink,
@@ -1731,11 +1822,28 @@ export class App {
       rv._pi = app._pi[idx];
       rv._sp = app._sp[idx];
     }
-    // Both fetch-path callers hand over an already-buffered body, so seed
-    // it unconditionally: c.req.body() works without { body: true } (Hono
-    // parity — the host already paid for the read). The bodyFlag gate only
-    // controls buffering cost on the streaming Node path in _dispatch.
-    rv._setBody(body);
+    // Capture the Web Request before the chain runs so c.req.raw returns
+    // it (Hono parity). The stream is left untouched here — body reading
+    // is declaration-driven below.
+    rv._setWeb(webReq);
+    // Lazy bodies: multipart routes arrive with their bytes already read
+    // (app.fetch's arrayBuffer for byte-exact parsing); fetchShim seeds a
+    // utf8 string. Everything else defers to the route's bodyFlag: declared
+    // `{ body: true }` routes buffer here from the Request's stream;
+    // undeclared routes keep `_body === ""` and the stream unconsumed —
+    // c.req.raw readers own the bytes (0.4.0 contract; 0.3 buffered all).
+    let chainBody = String(body);
+    if (
+      idx >= 0 &&
+      chainBody === "" &&
+      bodyU8 === null &&
+      webReq !== null &&
+      app._bodyF[idx] === 1 &&
+      bodyMethod(method)
+    ) {
+      chainBody = await webReq.text();
+    }
+    rv._setBody(chainBody);
     const c = new CtxCore(rv, sink);
     return new Promise<void>(function (resolve): void {
       // Multipart-declared routes parse the (already buffered) body
@@ -1744,7 +1852,7 @@ export class App {
       if (idx >= 0 && bodyMethod(method)) {
         const mp = app._mp[idx];
         if (mp.on === 1) {
-          const rc = runMultipartPrim(c, mp, body, bodyU8);
+          const rc = runMultipartPrim(c, mp, chainBody, bodyU8);
           if (rc === 413) {
             replyPlain(sink, 413, "Payload Too Large");
             resolve();
@@ -1961,6 +2069,40 @@ function headersFromRaw(req: unknown): Record<string, string> {
 // settled Response; we wrap the existing runChain in a callback that
 // resolves the Promise once the chain has produced a response or
 // runOnError has run.
+// Adoption-time view of a handler-returned Response, with the subset-safe
+// field-check that decides whether a settled chain value IS one. `instanceof`
+// and `.then` reads are subset-refused; `typeof status === "number"` plus
+// body/headers presence is the sanctioned shape (a plain record carrying all
+// three adopts too — documented, same trade-off Hono makes with its
+// Response-shape check).
+function adoptResponse(r: unknown, c: CtxCore): boolean {
+  if (r === null || r === undefined || r === (c as unknown)) {
+    return false;
+  }
+  const o = r as { status?: unknown; body?: unknown; headers?: unknown } | null;
+  if (o === null) {
+    return false;
+  }
+  if (typeof o.status !== "number") {
+    return false;
+  }
+  if (o.headers === null || o.headers === undefined) {
+    return false;
+  }
+  // body may legitimately be null (204/304-style Responses).
+  const view: ResView = {
+    status: o.status,
+    body: o.body === null || o.body === undefined ? null : (o.body as ReadableStream<Uint8Array>),
+    headers: o.headers as Headers,
+  };
+  const sink = c.sink;
+  // Only the fetch surface adopts: the Node surface keeps its
+  // write-through sink semantics (an adopted Response would have no
+  // ServerResponse to mirror into).
+  sink.adopt(view);
+  return true;
+}
+
 function runChainPromise(
   chain: Handler,
   c: CtxCore,
@@ -1982,12 +2124,14 @@ function runChainPromise(
   }
   // Not a thenable or already settled? The chain can return a Promise;
   // we await it via settleChain's existing pattern, but adapted to
-  // also resolve on success.
-  const p = settleAndResolve(r, c, sink, oef);
+  // also resolve on success. A settled Response value is adopted into
+  // the sink instead of counting as "sent nothing" (passthrough
+  // handlers `(c) => handler(c.req.raw)` are the motivating shape).
+  const p = settleAndResolveAdopting(r, c, sink, oef);
   p.then(resolve, resolve);
 }
 
-function settleAndResolve(
+function settleAndResolveAdopting(
   r: unknown,
   c: CtxCore,
   sink: ResponseSink,
@@ -1996,14 +2140,21 @@ function settleAndResolve(
   return new Promise<void>(function (resolve): void {
     function done(): void {
       if (c.sent === false && sink.isHeadersSent() === false) {
-        send500(sink);
+        if (adoptResponse(r, c) === false) {
+          send500(sink);
+        }
       }
       resolve();
     }
     if (r !== null && r !== undefined && typeof (r as { then?: unknown }).then === "function") {
       try {
         (r as Promise<unknown>).then(
-          function (): void {
+          function (v: unknown): void {
+            // Resolve-then-adopt: a promise fulfilled WITH a Response
+            // adopts that value, not the promise itself.
+            if (v !== null && v !== undefined && v !== (c as unknown)) {
+              r = v;
+            }
             done();
           },
           function (e: unknown): void {
