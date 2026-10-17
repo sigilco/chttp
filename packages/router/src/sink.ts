@@ -16,6 +16,7 @@
 // to ELF byte-for-byte with today.
 
 import type { ServerResponse } from "node:http";
+import type { ResView } from "./index.ts";
 
 // ResponseSink is a base class — not declared `abstract` (scriptc doesn't
 // lower abstract methods). Each method has a no-op default; concrete
@@ -28,6 +29,14 @@ export class ResponseSink {
   bodyBytes(_b: Uint8Array, _ct: string): void {}
   redirect(_url: string, _code: number): void {}
   write(_chunk: string): void {}
+  // Response adoption (0.4.0): a fetch-path handler returned a Response.
+  // No-op on the base (and on NodeResponseSink — there is no Web Response
+  // to mirror into a ServerResponse); FetchResponseSink overrides it.
+  adopt(_view: {
+    status: number;
+    body: ReadableStream<Uint8Array> | null;
+    headers: Headers;
+  }): void {}
   isSent(): boolean {
     return false;
   }
@@ -165,6 +174,12 @@ export class FetchResponseSink extends ResponseSink {
   chunks: string[];
   sent: boolean;
   headersSent: boolean;
+  // Adopted Response (0.4.0): the handler's own Response viewed through the
+  // ResView interface (host-typed fields are SC1090 — even `unknown`, so no
+  // slot for the object itself; the view interface with exactly the members
+  // we read lowers at 100% static). null until adopt() runs; toResponse()
+  // wraps the adopted body stream instead of the chunk buffer when set.
+  adopted: ResView | null;
 
   constructor() {
     super();
@@ -175,6 +190,7 @@ export class FetchResponseSink extends ResponseSink {
     this.chunks = [];
     this.sent = false;
     this.headersSent = false;
+    this.adopted = null;
   }
 
   setStatus(n: number): void {
@@ -270,6 +286,21 @@ export class FetchResponseSink extends ResponseSink {
     this.chunks.push(String(chunk));
   }
 
+  // Response adoption (0.4.0): a handler returned a full Response. Its
+  // status + Headers overwrite the captured state, and its body stream
+  // (the handler's own — never buffered here) is kept on the view so
+  // toResponse() wraps it instead of the chunk buffer. Overrides the
+  // base no-op: adoption is a fetch-surface behavior.
+  adopt(view: { status: number; body: ReadableStream<Uint8Array> | null; headers: Headers }): void {
+    this.status = Number(view.status);
+    const hs = view.headers;
+    const self = this;
+    hs.forEach(function (v: string, k: string): void {
+      self.setHeader(String(k), String(v));
+    });
+    this.adopted = view;
+  }
+
   isSent(): boolean {
     return this.sent;
   }
@@ -287,6 +318,11 @@ export class FetchResponseSink extends ResponseSink {
   // the chain settles. Headers come from hdrList (the append-only tail)
   // so multi-value Set-Cookie / Link survive the round-trip; hdrKeys /
   // hdrVals are the deduped last-wins map used by c.header() lookups.
+  //
+  // Adoption (0.4.0): when a handler returned a Response, its own body
+  // stream is wrapped here — status and headers were already copied into
+  // the captured state by adopt(), so the wrapper preserves the handler's
+  // stream identity without buffering a byte.
   toResponse(): Response {
     const init: { status: number; headers: [string, string][] } = {
       status: this.status,
@@ -294,6 +330,14 @@ export class FetchResponseSink extends ResponseSink {
     };
     for (let i = 0; i + 1 < this.hdrList.length; i += 2) {
       init.headers.push([String(this.hdrList[i]), String(this.hdrList[i + 1])]);
+    }
+    const a = this.adopted;
+    if (a !== null) {
+      const b = a.body;
+      if (b !== null) {
+        return new Response(b, init);
+      }
+      return new Response(null, init);
     }
     // Join captured chunks. A future streaming adapter (follow-up) will
     // return a ReadableStream Response instead of concatenating here.
