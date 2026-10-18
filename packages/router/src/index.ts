@@ -49,8 +49,8 @@ export interface ResView {
   body: ReadableStream<Uint8Array> | null;
   headers: Headers;
 }
-import { GenDispatch, ROUTE_CONTRACT_VERSION } from "./gen.ts";
-import type { DispatchFn } from "./gen.ts";
+import { GenDispatch, GenFetch, ROUTE_CONTRACT_VERSION } from "./gen.ts";
+import type { DispatchFn, DispatchFetchFn } from "./gen.ts";
 import { UpgradeDispatch } from "./upgrade.ts";
 import type { Socket } from "node:net";
 import { ResponseSink, NodeResponseSink, FetchResponseSink } from "./sink.ts";
@@ -64,12 +64,12 @@ import {
 } from "./multipart.ts";
 import type { MultipartFileSink, UploadedFile, DispositionParams } from "./multipart.ts";
 
-export { GenDispatch };
+export { GenDispatch, GenFetch };
 export { ResponseSink, NodeResponseSink, FetchResponseSink };
 export { MultipartParser, MultipartStorage, MemoryStorage, DiskStorage, multipartBoundary };
 export { memoryStorage, diskStorage } from "./multipart.ts";
 export type { MultipartFileSink, UploadedFile, DispositionParams };
-export type { DispatchFn };
+export type { DispatchFn, DispatchFetchFn };
 export { ROUTE_CONTRACT_VERSION };
 export { UpgradeDispatch };
 
@@ -1188,6 +1188,53 @@ export function _buffer(
   });
 }
 
+// Fetch-arm contract helpers (contracts/route-contract-fetch.md).
+// _guardFetch is _guard's Promise-returning twin: it drains the chain
+// through runChainPromise so the emitted dispatch's Promise resolves only
+// after the response settles. _bufferFetch mirrors _buffer's declared-body
+// rule for fetch: a fetchShim-seeded string wins; when it is empty the
+// captured Web Request's text() is buffered before the chain runs (the
+// fetch arm's analogue of the Node path's data/end buffering).
+export function _guardFetch(c: CtxCore, sink: ResponseSink, k: () => unknown): Promise<void> {
+  return new Promise<void>(function (resolve): void {
+    // No onError handler on this path — a no-op is passed rather than a
+    // literal null so runChainPromise's runOnError specialization never
+    // instantiates with a null-typed oef (SC2001). A thrown chain calls
+    // the no-op, leaves c.sent false, and the standard send500 runs —
+    // the same outcome the `oef === null` arm produces.
+    runChainPromise(
+      function (): unknown {
+        return k();
+      },
+      c,
+      sink,
+      function (_e: unknown, _c: CtxCore): void {},
+      resolve,
+    );
+  });
+}
+
+export async function _bufferFetch(
+  c: CtxCore,
+  sink: ResponseSink,
+  webReq: WebReqView | null,
+  seeded: string,
+  k: () => unknown,
+): Promise<void> {
+  const rv = c.req;
+  if (webReq !== null && seeded === "") {
+    try {
+      rv._setBody(await webReq.text());
+    } catch (e) {
+      send500(sink);
+      return;
+    }
+  } else {
+    rv._setBody(seeded);
+  }
+  await _guardFetch(c, sink, k);
+}
+
 // 405 Method Not Allowed with an Allow header built from the matched
 // node's registered methods. `*` (all) expands to every standard verb so
 // the header stays spec-true; GET implies HEAD.
@@ -1481,6 +1528,12 @@ export class App {
   // would fence eager program-code instantiation the same way a function
   // inside a record does. Default returns false (never registered).
   _gen: DispatchFn;
+  // Web Standards generated dispatch (contracts/route-contract-fetch.md),
+  // same closure-field shape as _gen. Default resolves false — the app
+  // falls back to _dispatchPrim when no emitted fetch module is
+  // registered, so the fetch path works identically with or without the
+  // unplugin emit.
+  _genFetch: DispatchFetchFn;
   // Upgrade seam (contracts/upgrade-contract.md), same closure-field shape as
   // _gen. serve() never attaches an "upgrade" listener: any attach built
   // inside package dist JS defers 2 SC1090 sites for EVERY npm app
@@ -1509,6 +1562,19 @@ export class App {
     this._mp = [];
     this._gen = function (_r: IncomingMessage, _s: ServerResponse): boolean {
       return false;
+    };
+    this._genFetch = function (
+      _m: string,
+      _u: string,
+      _h: Record<string, string> | null,
+      _w: WebReqView | null,
+      _b: string,
+      _b8: Uint8Array | null,
+      _s: FetchResponseSink,
+    ): Promise<boolean> {
+      return new Promise<boolean>(function (resolve): void {
+        resolve(false);
+      });
     };
     this._up = function (_r: IncomingMessage, _s: Socket, _h: Buffer): boolean {
       return false;
@@ -1643,6 +1709,39 @@ export class App {
     return this;
   }
 
+  // Registers a generated Web Standards dispatch module
+  // (contracts/route-contract-fetch.md) — the fetch-arm twin of
+  // withDispatch, tried FIRST by app.fetch and app.fetchShim. A `false`
+  // resolution declines to _dispatchPrim (405/404/notFound and bailed
+  // routes).
+  withFetchDispatch(d: GenFetch): App {
+    // Same contract-version drift guard as withDispatch — the stamp check
+    // runs before any other member read.
+    const stamped = d.ROUTE_CONTRACT_VERSION;
+    if (typeof stamped === "number" && stamped !== ROUTE_CONTRACT_VERSION) {
+      throw new Error(
+        "chttp: route contract version mismatch — fetch dispatch was generated against contract v" +
+          String(stamped) +
+          ", runtime implements v" +
+          String(ROUTE_CONTRACT_VERSION) +
+          ". Regenerate .chttp/*.gen.fetch.ts (upgrade @chttp/unplugin to match chttp) or align chttp.",
+      );
+    }
+    const g = d;
+    this._genFetch = function (
+      m: string,
+      u: string,
+      h: Record<string, string> | null,
+      w: WebReqView | null,
+      b: string,
+      b8: Uint8Array | null,
+      s: FetchResponseSink,
+    ): Promise<boolean> {
+      return g.dispatchFetch(m, u, h, w, b, b8, s);
+    };
+    return this;
+  }
+
   // Registers an upgrade dispatch (contracts/upgrade-contract.md). Last call
   // wins. The listener is only attached by serve()/upgradeHandler() users
   // when one is registered, so apps without it keep node's default.
@@ -1729,12 +1828,12 @@ export class App {
   // handler may either write through `c.*` or return a Response (Hono
   // accepts both); see adoptResponse in the chain runner.
   //
-  // Generated dispatch (contracts/route-contract.md) is still
-  // Node-shaped: a synthesized ServerResponse is constructed from the
-  // FetchResponseSink and passed to the dispatcher. When the dispatcher
-  // writes to it, the writes are mirrored into the FetchResponseSink via
-  // the wrapper. See follow-up A in the plan for a real Web-Standards-
-  // shaped GenDispatch.
+  // Generated dispatch (contracts/route-contract-fetch.md) is Web
+  // Standards-shaped: the emitted GenFetch matcher takes the same
+  // normalized primitives _dispatchPrim consumes and writes straight into
+  // the FetchResponseSink — no synthesized ServerResponse anywhere. A
+  // `false` resolution declines to _dispatchPrim for 405/404/notFound and
+  // routes the emitter bailed on.
   fetch(req: Request, _env?: unknown, _ctx?: unknown): Promise<Response> {
     const app = this;
     // The router matches on the path part of the URL (Node's IncomingMessage
@@ -1757,12 +1856,14 @@ export class App {
       if (isMp && method !== "GET" && method !== "HEAD") {
         bodyU8 = new Uint8Array(await req.arrayBuffer());
       }
-      // Generated dispatch is Node-shaped (contracts/route-contract.md) —
-      // the contract has no Web Standards variant yet (follow-up A in the
-      // plan). For the fetch path we skip generated dispatch entirely;
-      // the unplugin-emitted routes would need a parallel contract. Today
-      // no shipped example uses generated dispatch through app.fetch.
-      await app._dispatchPrim(method, url, headersFromRaw(req), req, body, bodyU8, sink);
+      // Generated Web Standards dispatch first (contracts/
+      // route-contract-fetch.md); a `false` resolution declines to the
+      // runtime path — same decline shape as the Node arm's _gen check.
+      const hs = headersFromRaw(req);
+      const handled = await app._genFetch(method, url, hs, req, body, bodyU8, sink);
+      if (handled === false) {
+        await app._dispatchPrim(method, url, hs, req, body, bodyU8, sink);
+      }
       return sink.toResponse();
     })();
   }
@@ -1799,8 +1900,27 @@ export class App {
     const sink = new FetchResponseSink();
     const m = String(method).toUpperCase();
     const seeded = m === "GET" || m === "HEAD" ? "" : String(body);
-    const p = app._dispatchPrim(String(method), String(url), headers, null, seeded, null, sink);
-    p.then(function (): void {
+    // Generated Web Standards dispatch first — the emitted GenFetch runs
+    // identically on plain primitives (webReq === null), so an ELF bench
+    // exercises the same lowered matcher as app.fetch. Decline falls
+    // through to _dispatchPrim.
+    const p = app._genFetch(String(method), String(url), headers, null, seeded, null, sink);
+    p.then(function (handled: boolean): void {
+      if (handled === false) {
+        const p2 = app._dispatchPrim(
+          String(method),
+          String(url),
+          headers,
+          null,
+          seeded,
+          null,
+          sink,
+        );
+        p2.then(function (): void {
+          respond(sink.status, sink.hdrList, sink.chunks.join(""));
+        });
+        return;
+      }
       respond(sink.status, sink.hdrList, sink.chunks.join(""));
     });
   }
@@ -2173,7 +2293,21 @@ function runChainPromise(
   // because app.fetch already crosses at least one microtask (await
   // req.text()). Use the async settle path so the resolve() fires
   // after the chain fully drains.
-  const r = chain(c);
+  // A synchronous throw must become a 500, not a rejected promise —
+  // runChain (the Node twin) catches it inline; here the guard keeps
+  // app.fetch and fetchShim from surfacing an unhandled rejection.
+  let r: unknown;
+  try {
+    r = chain(c);
+  } catch (e) {
+    if (oef !== null) {
+      runOnError(oef, e, sink, c);
+    } else {
+      send500(sink);
+    }
+    resolve();
+    return;
+  }
   if (isSettled(r, c)) {
     if (c.sent === false && sink.isHeadersSent() === false) {
       send500(sink);
@@ -2254,7 +2388,18 @@ function allow405Promise(
   const seen: { [k: string]: number } = {};
   const out: string[] = [];
   for (let i = 0; i < hm.length; i++) {
-    const m = String(hm[i]);
+    let m = String(hm[i]);
+    // Same expansion as the Node allow405: `*` covers every standard verb
+    // and GET implies HEAD so the header stays spec-true.
+    if (m === "*") {
+      m = "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS";
+    } else if (m === "GET" && seen["HEAD"] === undefined) {
+      if (seen["GET"] === undefined) {
+        seen["GET"] = 1;
+        out.push("GET");
+      }
+      m = "HEAD";
+    }
     if (seen[m] !== 1) {
       seen[m] = 1;
       out.push(m);
