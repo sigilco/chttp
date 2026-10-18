@@ -9,13 +9,13 @@ const app = createRouter();
 
 app.post(
   "/api/entries/:entryId/media",
-  { multipart: { storage: diskStorage(MEDIA_DIR) } },
   (c) => {
     const file = c.req.file("file"); // UploadedFile | null
     const title = c.req.field("title"); // string | null
     db.run([file!.path, file!.mimeType, file!.size, title]);
     return c.json({ ok: true });
   },
+  { multipart: { storage: diskStorage(MEDIA_DIR) } },
 );
 ```
 
