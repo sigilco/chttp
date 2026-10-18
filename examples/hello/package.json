@@ -9,7 +9,7 @@
     "start:node": "node --experimental-strip-types src/main.ts"
   },
   "dependencies": {
-    "@chttp/router": "0.1.0"
+    "@chttp/router": "0.3.0"
   },
   "devDependencies": {
     "scriptc": ">=0.3.2"

@@ -107,9 +107,12 @@ middleware merge.
 
 `app.fetch(req, env, ctx)` is the canonical entry — the same shape
 Cloudflare Workers, Deno Deploy, Bun, Vercel Edge, and Lambda expect.
-The existing `app.handler()` is a thin Node adapter around it. Both
-compile to a native ELF via `scriptc build` (gate
-`bench/apps/chttp-fetch.ts` stays at 100% static).
+The existing `app.handler()` is a thin Node adapter around it. The Node
+surface compiles to a native ELF via `scriptc build`; `app.fetch` is
+JS-runtime-only today (`new Request` is not constructible under scriptc
+0.3.x), with the fetch dispatch path ELF-verified through the
+`app.fetchShim` host-shim entry (gate `bench/apps/chttp-fetch.ts` stays
+at 100% static).
 
 ```ts
 const app = createRouter();
