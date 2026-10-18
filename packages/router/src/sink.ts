@@ -107,9 +107,12 @@ export class NodeResponseSink extends ResponseSink {
   writeBody(w: string): void {
     const s = String(w);
     this.res.statusCode = this._status;
-    if (this._set["content-type"] === undefined) {
-      this.res.setHeader("content-type", "text/plain; charset=utf-8");
-      this._set["content-type"] = "text/plain; charset=utf-8";
+    // Empty bodies carry no default content-type (Hono parity: redirects
+    // and null-body answers send none). An explicit c.text("") still sets
+    // its own content-type upstream of this check.
+    if (this._set["content-type"] === undefined && s.length > 0) {
+      this.res.setHeader("content-type", "text/plain; charset=UTF-8");
+      this._set["content-type"] = "text/plain; charset=UTF-8";
     }
     if (this._set["content-length"] === undefined) {
       this.res.setHeader("content-length", String(utf8len(s)));
@@ -259,8 +262,10 @@ export class FetchResponseSink extends ResponseSink {
           haveCT = true;
         }
       }
-      if (!haveCT) {
-        this.appendHeader("content-type", "text/plain; charset=utf-8");
+      // Empty bodies carry no default content-type (Hono parity — see
+      // NodeResponseSink.writeBody).
+      if (!haveCT && str.length > 0) {
+        this.appendHeader("content-type", "text/plain; charset=UTF-8");
       }
     }
     this.chunks.push(str);
@@ -341,8 +346,13 @@ export class FetchResponseSink extends ResponseSink {
     }
     // Join captured chunks. A future streaming adapter (follow-up) will
     // return a ReadableStream Response instead of concatenating here.
+    // Empty joins pass null, not "": the Response constructor stamps its
+    // own content-type on a string body even when init.headers has none.
     const body = this.chunks.join("");
-    return new Response(body, init);
+    if (body.length > 0) {
+      return new Response(body, init);
+    }
+    return new Response(null, init);
   }
 }
 

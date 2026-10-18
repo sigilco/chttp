@@ -158,3 +158,19 @@ test("405/404 unchanged: method miss is 405 with Allow, miss is bare Not Found",
   assert.equal(miss404.status, 404);
   assert.equal(await miss404.text(), "Not Found");
 });
+
+test("empty bodies carry no content-type on the fetch surface (Hono parity)", async () => {
+  const app = createRouter();
+  app.get("/go", (c) => c.redirect("/dest"));
+  app.get("/null-body", () => new Response(null, { status: 400 }));
+  const red = await app.fetch(new Request("http://x/go"));
+  assert.equal(red.status, 302);
+  assert.equal(red.headers.get("location"), "/dest");
+  assert.equal(red.headers.get("content-type"), null);
+  const nil = await app.fetch(new Request("http://x/null-body"));
+  assert.equal(nil.status, 400);
+  assert.equal(nil.headers.get("content-type"), null);
+  const nf = await app.fetch(new Request("http://x/nope"));
+  assert.equal(nf.status, 404);
+  assert.equal(nf.headers.get("content-type"), "text/plain; charset=UTF-8");
+});

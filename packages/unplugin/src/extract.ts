@@ -358,7 +358,7 @@ function detectStaticSend(p: Parser, h: Expression): StaticSend | null {
         return null;
       }
       send.contentType =
-        op.name === "text" ? "text/plain; charset=utf-8" : "text/html; charset=utf-8";
+        op.name === "text" ? "text/plain; charset=UTF-8" : "text/html; charset=utf-8";
       send.body = v.v;
     } else if (op.name === "redirect" && op.args.length >= 1 && op.args.length <= 2) {
       const u = evalString(p, op.args[0]);
