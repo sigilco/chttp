@@ -320,7 +320,7 @@ export function emitGenModule(model: ModuleModel, opts: EmitOptions): string {
   out.push("      res.destroy()");
   out.push("    } else {");
   out.push("      res.statusCode = 500");
-  out.push('      res.setHeader("content-type", "text/plain; charset=utf-8")');
+  out.push('      res.setHeader("content-type", "text/plain; charset=UTF-8")');
   out.push('      res.setHeader("content-length", "21")');
   out.push('      res.end("Internal Server Error")');
   out.push("    }");

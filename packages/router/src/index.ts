@@ -570,7 +570,7 @@ export class CtxCore {
   }
 
   text(s: string): CtxCore {
-    return this._send(String(s), "text/plain; charset=utf-8");
+    return this._send(String(s), "text/plain; charset=UTF-8");
   }
 
   html(s: string): CtxCore {
@@ -773,7 +773,7 @@ function abortMultipart(
     sink.setHeader("connection", "close");
   }
   sink.setStatus(status);
-  sink.setHeader("content-type", "text/plain; charset=utf-8");
+  sink.setHeader("content-type", "text/plain; charset=UTF-8");
   sink.setHeader("content-length", String(utf8len(msg)));
   sink.writeBody(msg);
 }
@@ -869,7 +869,7 @@ function runMultipartPrim(c: CtxCore, cfg: MpCfg, body: string, bodyU8: Uint8Arr
 // IncomingMessage to destroy.
 function replyPlain(sink: ResponseSink, status: number, msg: string): void {
   sink.setStatus(status);
-  sink.setHeader("content-type", "text/plain; charset=utf-8");
+  sink.setHeader("content-type", "text/plain; charset=UTF-8");
   sink.setHeader("content-length", String(utf8len(msg)));
   sink.writeBody(msg);
 }
@@ -1195,7 +1195,7 @@ function allow405(
   try {
     sink.setStatus(405);
     sink.setHeader("allow", out.join(", "));
-    sink.setHeader("content-type", "text/plain; charset=utf-8");
+    sink.setHeader("content-type", "text/plain; charset=UTF-8");
     sink.setHeader("content-length", "18");
     sink.writeBody("Method Not Allowed");
   } catch (e) {
@@ -1218,7 +1218,7 @@ function send500(sink: ResponseSink): void {
       sink.destroy();
     } else {
       sink.setStatus(500);
-      sink.setHeader("content-type", "text/plain; charset=utf-8");
+      sink.setHeader("content-type", "text/plain; charset=UTF-8");
       sink.setHeader("content-length", "21");
       sink.writeBody("Internal Server Error");
     }
@@ -2222,7 +2222,7 @@ function allow405Promise(
   try {
     sink.setStatus(405);
     sink.setHeader("allow", out.join(", "));
-    sink.setHeader("content-type", "text/plain; charset=utf-8");
+    sink.setHeader("content-type", "text/plain; charset=UTF-8");
     sink.setHeader("content-length", "18");
     sink.writeBody("Method Not Allowed");
   } catch (e) {
