@@ -14,7 +14,10 @@ export function progressNotification(
   total: number | null,
   message: string | null,
 ): JsonRpcRequest {
-  const params: { [k: string]: unknown } = { progress: progress };
+  // Open record: expanding writes on a non-empty literal are dropped when
+  // scriptc lowers the packed dist JS, so params starts from {}.
+  const params: { [k: string]: unknown } = {};
+  params["progress"] = progress;
   if (progressToken !== null) {
     params["progressToken"] = progressToken;
   }
