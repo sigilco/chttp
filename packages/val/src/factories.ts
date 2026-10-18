@@ -33,13 +33,13 @@ import {
 
 // ---------------------------------------------------------------- factories
 
-export function string(): VSchema {
+export function string(): VStr {
   return new VStr();
 }
-export function number(): VSchema {
+export function number(): VNum {
   return new VNum();
 }
-export function boolean(): VSchema {
+export function boolean(): VBool {
   return new VBool();
 }
 export function any(): VSchema {
@@ -75,22 +75,22 @@ export function optionalBool(inner: VSchema, def: boolean): VSchema {
 export function nullish(inner: VSchema): VSchema {
   return new VNullish(inner);
 }
-export function array(item: VSchema): VSchema {
+export function array(item: VSchema): VArray {
   return new VArray(item);
 }
-export function tuple(items: VSchema[]): VSchema {
+export function tuple(items: VSchema[]): VTuple {
   return new VTuple(items);
 }
-export function object(entries: { [k: string]: VSchema }): VSchema {
+export function object(entries: { [k: string]: VSchema }): VObject {
   return new VObject(entries, 0);
 }
-export function looseObject(entries: { [k: string]: VSchema }): VSchema {
+export function looseObject(entries: { [k: string]: VSchema }): VObject {
   return new VObject(entries, 1);
 }
-export function strictObject(entries: { [k: string]: VSchema }): VSchema {
+export function strictObject(entries: { [k: string]: VSchema }): VObject {
   return new VObject(entries, 2);
 }
-export function record(keySch: VSchema, valSch: VSchema): VSchema {
+export function record(keySch: VSchema, valSch: VSchema): VRecord {
   return new VRecord(keySch, valSch);
 }
 export function union(options: VSchema[]): VSchema {

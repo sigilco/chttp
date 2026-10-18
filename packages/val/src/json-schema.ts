@@ -410,14 +410,23 @@ function emit(s: VSchema): JsonSchemaNode {
   return n;
 }
 
-// Emit a JSON Schema 2020-12 node for any val schema.
-export function toJsonSchema(s: VSchema): JsonSchemaNode {
+// Emit a JSON Schema 2020-12 node for a val schema. The parameter is the
+// Standard Schema structural minimum — `{ "~standard": unknown }` — not
+// `VSchema`, so the function drops straight into a consumer's
+// `emitJsonSchema`/`emit` adapter seam (e.g. @chttp/mcp's
+// `emitJsonSchema: (s) => v.toJsonSchema(s)`): a `VSchema` parameter is not
+// assignable from `StandardSchemaV1`, which is what those seams pass
+// (cutils#27). Non-val inputs throw rather than silently emit `{}`.
+export function toJsonSchema(s: { "~standard": unknown }): JsonSchemaNode {
+  if (!(s instanceof VSchema)) {
+    throw new Error("toJsonSchema expects a @chttp/val schema");
+  }
   return emit(s);
 }
 
-// Emit an OpenAPI 3.1 Schema Object for any val schema. OpenAPI 3.1 adopts
+// Emit an OpenAPI 3.1 Schema Object for a val schema. OpenAPI 3.1 adopts
 // JSON Schema 2020-12 wholesale (type arrays replace `nullable:`), so this is
 // currently the same node under a stable, dialect-named entry point.
-export function toOpenApiSchema(s: VSchema): JsonSchemaNode {
-  return emit(s);
+export function toOpenApiSchema(s: { "~standard": unknown }): JsonSchemaNode {
+  return toJsonSchema(s);
 }
