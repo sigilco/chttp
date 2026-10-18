@@ -6,4 +6,4 @@
 // together on any contract change (contracts/route-contract.md, Contract
 // versioning) — never let them drift.
 
-export const ROUTE_CONTRACT_VERSION = 3;
+export const ROUTE_CONTRACT_VERSION = 4;

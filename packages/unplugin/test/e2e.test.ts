@@ -293,3 +293,167 @@ describe("e2e: contract version validation at withDispatch", () => {
     assert.ok(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Fetch arm (contracts/route-contract-fetch.md): emit the Web Standards
+// sibling module beside the Node arm, register it via withFetchDispatch,
+// and drive it through the real app.fetch / app.fetchShim entries.
+interface FetchGenInstance {
+  dispatchFetch: (
+    method: string,
+    url: string,
+    headers: { [k: string]: string } | null,
+    webReq: unknown,
+    body: string,
+    bodyU8: Uint8Array | null,
+    sink: unknown,
+  ) => Promise<boolean>;
+}
+
+interface FetchApp {
+  withFetchDispatch: (d: FetchGenInstance) => FetchApp;
+  fetch: (req: Request) => Promise<Response>;
+  fetchShim: (
+    method: string,
+    url: string,
+    headers: { [k: string]: string } | null,
+    body: string,
+    respond: (status: number, hdrList: string[], body: string) => void,
+  ) => void;
+}
+
+describe("e2e: generated fetch dispatch executes against the real App", () => {
+  let dir = "";
+  let app: FetchApp | null = null;
+
+  before(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "unplugin-chttp-fe-"));
+    const modPath = path.join(dir, "routes.chttp.ts");
+    const relChttp =
+      "./" +
+      path.relative(fs.realpathSync(dir), fs.realpathSync(CHTTP_SRC)).split(path.sep).join("/");
+    fs.writeFileSync(modPath, ROUTES_SRC.replace(/'@chttp\/router'/g, "'" + relChttp + "'"));
+    const model = extractModule(modPath, fs.readFileSync(modPath, "utf8"), {
+      imports: [relChttp],
+    });
+    const genDir = path.join(dir, ".chttp");
+    fs.mkdirSync(genDir, { recursive: true });
+    const relChttpFromGen =
+      "./" +
+      path.relative(fs.realpathSync(genDir), fs.realpathSync(CHTTP_SRC)).split(path.sep).join("/");
+    const { emitFetchModule, genFetchFileName } = await import("../src/emitfetch.ts");
+    const genSrc = emitFetchModule(model, {
+      importFrom: relChttpFromGen,
+      modulePath: modPath,
+    });
+    const genPath = path.join(genDir, genFetchFileName(modPath));
+    fs.writeFileSync(genPath, genSrc);
+    const mod = (await import(genPath)) as {
+      CompiledFetchRoutes: new (a: FetchApp) => FetchGenInstance;
+    };
+    const routesMod = (await import(modPath)) as { app: FetchApp };
+    app = routesMod.app;
+    app.withFetchDispatch(new mod.CompiledFetchRoutes(app));
+  });
+
+  after(() => {
+    if (dir !== "") {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  const go = (method: string, url: string, body: string | null = null): Promise<Response> => {
+    return (app as NonNullable<typeof app>).fetch(
+      new Request("http://x" + url, {
+        method: method,
+        body: body === null ? undefined : body,
+      }),
+    );
+  };
+
+  it("serves static, param and wildcard routes through app.fetch", async () => {
+    const j = await go("GET", "/json");
+    assert.equal(j.status, 200);
+    assert.equal(await j.text(), '{"hello":"world"}');
+    assert.match(j.headers.get("content-type") ?? "", /json/);
+    const u = await go("GET", "/user/a%20b");
+    assert.equal(await u.text(), '{"id":"a b"}');
+    const w = await go("GET", "/files/a/b/c.txt");
+    assert.equal(await w.text(), "a/b/c.txt");
+  });
+
+  it("buffers the body via _bufferFetch for write methods", async () => {
+    const r = await go("POST", "/echo", "hi there");
+    assert.equal(r.status, 200);
+    assert.equal(await r.text(), "hi there");
+  });
+
+  it("redirects via a specialized runner and runs middleware chains", async () => {
+    const rd = await go("GET", "/redir");
+    assert.equal(rd.status, 302);
+    assert.equal(rd.headers.get("location"), "/json");
+    const mw = await go("GET", "/mwd");
+    assert.equal(await mw.text(), "with-mw");
+    assert.equal(mw.headers.get("x-mw"), "1");
+  });
+
+  it("mounted sub-router + *-method + HEAD fallback all land", async () => {
+    const h = await go("GET", "/api/health");
+    assert.equal(await h.text(), '{"ok":true}');
+    const a = await go("DELETE", "/any");
+    assert.equal(await a.text(), "any:DELETE");
+    const hd = await go("HEAD", "/json");
+    assert.equal(hd.status, 200);
+  });
+
+  it("declines cleanly — runtime path answers misses and bailed routes", async () => {
+    const nf = await go("GET", "/missing");
+    assert.equal(nf.status, 404);
+    assert.equal(await nf.text(), "nope");
+    const dyn = await go("GET", "/dyn");
+    assert.equal(await dyn.text(), "dynamic");
+  });
+
+  it("fetchShim drives the same emitted dispatch (ELF parity)", async () => {
+    const out = await new Promise<{ status: number; body: string }>((resolve) => {
+      (app as NonNullable<typeof app>).fetchShim(
+        "GET",
+        "/user/99",
+        null,
+        "",
+        (status, _hdrList, body) => {
+          resolve({ status, body });
+        },
+      );
+    });
+    assert.equal(out.status, 200);
+    assert.equal(out.body, '{"id":"99"}');
+    const out2 = await new Promise<{ status: number; body: string }>((resolve) => {
+      (app as NonNullable<typeof app>).fetchShim(
+        "POST",
+        "/echo",
+        null,
+        "shim-body",
+        (status, _hdrList, body) => {
+          resolve({ status, body });
+        },
+      );
+    });
+    assert.equal(out2.body, "shim-body");
+  });
+
+  it("withFetchDispatch rejects a stale contract stamp", async () => {
+    const m = (await import(CHTTP_SRC)) as {
+      createRouter: () => { withFetchDispatch: (d: unknown) => unknown };
+      ROUTE_CONTRACT_VERSION: number;
+    };
+    assert.throws(
+      () =>
+        m.createRouter().withFetchDispatch({
+          ROUTE_CONTRACT_VERSION: 999,
+          dispatchFetch: async () => false,
+        }),
+      new RegExp("contract version mismatch.*v999.*v" + String(m.ROUTE_CONTRACT_VERSION)),
+    );
+  });
+});

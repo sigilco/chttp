@@ -20,6 +20,7 @@ import * as path from "node:path";
 import picomatch from "picomatch";
 import { createUnplugin } from "unplugin";
 import { emitGenModule, genFileName } from "./emit.ts";
+import { emitFetchModule, genFetchFileName } from "./emitfetch.ts";
 import { extractModule } from "./extract.ts";
 import { emitOpenApiModule, openApiFileName } from "./openapi.ts";
 import { emitClientModule, clientFileName } from "./client.ts";
@@ -166,6 +167,22 @@ export const chttpPlugin = createUnplugin((options?: ChttpPluginOptions) => {
     if (prev !== gen) {
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, gen);
+    }
+    // Web Standards arm (contracts/route-contract-fetch.md): the
+    // .gen.fetch.ts sibling the app.fetch/app.fetchShim path registers
+    // through withFetchDispatch. Emitted unconditionally — an app that
+    // never imports it pays nothing.
+    const genFetch = emitFetchModule(model, { importFrom: importFrom });
+    const outFetch = path.join(path.dirname(id), ".chttp", genFetchFileName(id));
+    let prevFetch = "";
+    try {
+      prevFetch = fs.readFileSync(outFetch, "utf8");
+    } catch {
+      prevFetch = "";
+    }
+    if (prevFetch !== genFetch) {
+      fs.mkdirSync(path.dirname(outFetch), { recursive: true });
+      fs.writeFileSync(outFetch, genFetch);
     }
     if (openapiOn) {
       const stem = path
