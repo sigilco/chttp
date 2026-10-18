@@ -62,5 +62,5 @@ export default {
 
 The Node `app.handler()` surface compiles to a native ELF via `scriptc build`. `app.fetch` itself is JS-runtime-only today — `new Request` is not constructible inside the binary under scriptc 0.3.x — but the fetch dispatch path is ELF-verified through the [`app.fetchShim`](targets.md#native-elf) host-shim entry (the `chttp-fetch` gate stays at 100% static coverage). Recipes for the two most common targets:
 
-- [`examples/integrations/cloudflare-workers/`](../examples/integrations/cloudflare-workers/) — `wrangler dev` / `wrangler deploy`, `app.fetch` as the Workerd fetch handler.
+- [`examples/integrations/cloudflare-workers/`](../examples/integrations/cloudflare-workers/) — `wrangler dev` / `wrangler deploy`, `app.fetch` as the Workerd fetch handler. Needs `nodejs_compat` + `enable_nodejs_fs_module` compat flags (the router statically imports `node:http` and `node:fs`); verified by a real-workerd smoke in the recipe's test suite.
 - [`examples/integrations/aws-lambda/`](../examples/integrations/aws-lambda/) — APIGW v2 / Lambda URL bridge (`provided.al2023` ELF or Node runtime).

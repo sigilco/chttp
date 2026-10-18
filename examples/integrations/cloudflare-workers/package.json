@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --experimental-strip-types --test test/smoke.test.ts"
+    "test": "node --experimental-strip-types --test test/smoke.test.ts test/workerd.test.mjs"
   },
   "dependencies": {
     "@chttp/router": "workspace:*"
@@ -14,6 +14,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
     "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "workerd": "^1.20261012.1",
     "wrangler": "^4.0.0"
   }
 }
