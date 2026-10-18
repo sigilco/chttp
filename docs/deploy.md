@@ -4,9 +4,11 @@ Pick one of three ways to ship a chttp app.
 
 | Option                  | Ships                       | Image or artifact | Cold start |
 | ----------------------- | --------------------------- | ----------------- | ---------- |
-| Docker (`FROM scratch`) | one static binary           | 1.24 MB           | ~3 ms      |
-| Binary only             | one static binary           | ~1.2 MB           | ~3 ms      |
+| Docker (`FROM scratch`) | one static binary           | ~2.4 MB           | unverified |
+| Binary only             | one static binary           | ~2.4–2.6 MB       | unverified |
 | Node                    | your JS plus `node_modules` | node runtime      | 83 ms      |
+
+Binary sizes measured on macOS arm64 with router 0.3.0 and scriptc 0.3.4: the `examples/hello` app builds to 2,558,232 B, or 2,407,680 B with `--strip` (RSS ~3 MB). The `chttp-scriptc` bench cell ([`bench/RESULTS-v2.md`](../bench/RESULTS-v2.md)) measured a 3 ms median cold start for its own app, but per-app cold start was not re-measured for this release — treat it as unverified until the cell is re-run.
 
 ## Docker
 
@@ -58,7 +60,7 @@ export default {
 };
 ```
 
-Both surfaces compile to a native ELF via `scriptc build` (the `chttp-fetch` gate stays at 100% static coverage). Recipes for the two most common targets:
+The Node `app.handler()` surface compiles to a native ELF via `scriptc build`. `app.fetch` itself is JS-runtime-only today — `new Request` is not constructible inside the binary under scriptc 0.3.x — but the fetch dispatch path is ELF-verified through the [`app.fetchShim`](targets.md#native-elf) host-shim entry (the `chttp-fetch` gate stays at 100% static coverage). Recipes for the two most common targets:
 
 - [`examples/integrations/cloudflare-workers/`](../examples/integrations/cloudflare-workers/) — `wrangler dev` / `wrangler deploy`, `app.fetch` as the Workerd fetch handler.
 - [`examples/integrations/aws-lambda/`](../examples/integrations/aws-lambda/) — APIGW v2 / Lambda URL bridge (`provided.al2023` ELF or Node runtime).
