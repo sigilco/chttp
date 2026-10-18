@@ -40,6 +40,7 @@ RUN npm ci \
  && gcc -O2 -o ceilings/bin/c-mongoose ceilings/c-mongoose.c ceilings/mongoose.c -DMG_ENABLE_LOG=0 \
  && scriptc build apps/raw.ts -o bin/raw-scriptc --optimization=speed \
  && scriptc build apps/chttp.ts -o bin/chttp-scriptc --optimization=speed \
+ && scriptc build apps/chttp-elf-fetch.ts -o bin/chttp-elf-fetch --optimization=speed \
  && scriptc build apps/chttp-fast.ts -o bin/chttp-fast-scriptc --optimization=speed
 
 # Full run: autocannon matrix -> wrk2 cross-validation -> aggregates.

@@ -20,6 +20,10 @@ mkdir -p "$RESULTS" logs
 SUBJECTS=(
   "chttp-node|node apps/chttp.ts|full|"
   "chttp-bun|bun apps/chttp.ts|full|"
+  "chttp-fetch-node|node apps/chttp-fetch.ts|full|"
+  "chttp-fetch-bun|bun apps/chttp-fetch.ts|full|"
+  "chttp-scriptc|./bin/chttp-scriptc|full|bin/chttp-scriptc"
+  "chttp-elf-fetch|./bin/chttp-elf-fetch|full|bin/chttp-elf-fetch"
   "raw-node|node apps/raw.ts|full|"
   "raw-bun|bun apps/raw-bun.ts|full|"
   "raw-scriptc|./bin/raw-scriptc|full|bin/raw-scriptc"
