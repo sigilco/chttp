@@ -1,5 +1,5 @@
 minimumReleaseAgeExclude:
-  - '@chttp/router@0.1.0'
+  - '@chttp/router@0.3.0'
   - '@scriptc/cli-darwin-arm64@0.3.1'
   - '@scriptc/cli-darwin-x64@0.3.1'
   - '@scriptc/cli-linux-arm64-gnu@0.3.1'
