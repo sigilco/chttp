@@ -14,9 +14,9 @@ export default { async fetch(req, env, ctx) { return app.fetch(req, env, ctx); }
 
 ## Configuration
 
-`wrangler.toml` pins `compatibility_date = "2025-09-01"` and enables `nodejs_compat`. The flag is required because `@chttp/router` imports `node:http` types in its `app.handler` and the generated dispatch shim; without the flag, those types resolve to Workerd's bundled ambient types and the surface slips.
+`wrangler.toml` pins `compatibility_date = "2025-09-01"` and enables `nodejs_compat` plus `enable_nodejs_fs_module`. `nodejs_compat` is required because `@chttp/router` imports `node:http` types in its `app.handler` and the generated dispatch shim; without the flag, those types resolve to Workerd's bundled ambient types and the surface slips. `enable_nodejs_fs_module` is required because `multipart.ts` imports `node:fs` statically for `DiskStorage` and `nodejs_compat` alone does not provide it — on Workerd the flag mounts an in-memory filesystem (ephemeral per isolate), so `DiskStorage` resolves and works.
 
-For the fetch path specifically (what this example uses), `nodejs_compat` is not strictly required at runtime — `app.fetch` only constructs Web `Request`/`Response` objects — but it keeps the type imports consistent with the Node path, so the same `createRouter()` symbol works in both environments.
+For the fetch path specifically (what this example uses), neither flag changes `app.fetch`'s behavior — it only consumes the host-provided `Request` and returns a `Response` — but the flags keep the whole `@chttp/router` import graph resolvable inside Workerd.
 
 ## Local development
 
@@ -26,7 +26,10 @@ pnpm --filter chttp-example-cloudflare-workers test   # in-process smoke
 pnpm --filter chttp-example-cloudflare-workers dev    # wrangler dev
 ```
 
-The in-process smoke test (`test/smoke.test.ts`) fires a real `Request` through `app.fetch` and asserts the response — no network, no Wrangler, no Workers credentials. It runs in CI as the regression gate.
+Two tests gate this recipe in CI:
+
+- `test/smoke.test.ts` — in-process spec smoke: fires a real `Request` through `app.fetch` and asserts the response. No network, no Wrangler, no Workers credentials.
+- `test/workerd.test.mjs` — **real-workerd smoke**: bundles `src/main.ts` with esbuild, boots the actual `workerd` binary on a socket, and asserts every route over HTTP. This is the honest check that the app runs inside the WinterCG runtime (not just under Node with `Request` polyfilled) — `new Request` is not constructible under scriptc 0.3.x anyway, so the transport only ever sees a host-supplied `Request`.
 
 The `wrangler dev` command boots a local Workerd on `http://localhost:8787` and serves the same routes. Once it's up, exercise it with curl:
 

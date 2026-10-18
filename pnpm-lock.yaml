@@ -257,6 +257,12 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.19.2
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      workerd:
+        specifier: ^1.20261012.1
+        version: 1.20261012.1
       wrangler:
         specifier: ^4.0.0
         version: 4.151.0(@cloudflare/workers-types@4.20260702.1)(@types/node@24.19.2)
