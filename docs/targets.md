@@ -6,7 +6,7 @@ The same source runs on three targets. Pick per deployment.
 | --- | --- | --- |
 | Node | `app.serve({port})` or `app.handler()` | npm packages, fastest iteration, dev workflow |
 | Web Standards | `app.fetch(req, env, ctx)` | Cloudflare Workers, Deno Deploy, Bun, Vercel Edge, Netlify Edge, Lambda, Service Worker, anywhere with a `Request` |
-| Native ELF | `scriptc build` → static binary | Containers, scratch images, ~3 ms cold start, no runtime needed |
+| Native ELF | `scriptc build` → static binary | Containers, scratch images, single-digit-ms cold start, no runtime needed |
 
 The Web Standards surface is canonical. `app.handler()` is a 50-80 LOC Node adapter around `app.fetch`; the same `createRouter()` symbol works in every environment.
 
@@ -46,9 +46,13 @@ scriptc build app.js --npm-static @chttp/router --optimization=speed -o app-bin
 
 Everything the app imports must stay inside the scriptc subset, so npm packages outside it do not compile. Check with `scriptc coverage`. Rules for authors: [Coding agents](architecture.md). To call C libraries from the ELF, see [Native FFI](native.md).
 
-The `app.fetch` surface compiles to ELF too — the gate
-[`bench/apps/chttp-fetch.ts`](../bench/apps/chttp-fetch.ts) stays at 100% static
-coverage as part of the standard gate suite.
+`app.fetch` itself is JS-runtime-only today: `new Request` is not constructible
+under scriptc 0.3.x, so an ELF host cannot call `app.fetch(req)`. The native
+entry is the host-shim `app.fetchShim(method, url, headers, body, respond)` —
+plain primitives in, a callback out, no WHATWG types on either side — which
+runs the same route table through the shared `_dispatchPrim` dispatch
+primitive. The gate [`bench/apps/chttp-fetch.ts`](../bench/apps/chttp-fetch.ts)
+keeps that path at 100% static coverage as part of the standard gate suite.
 
 ## Bundler pipeline
 
@@ -56,7 +60,7 @@ coverage as part of the standard gate suite.
 
 ## Docker
 
-A `FROM scratch` image of about 1.2 MB: [Deploy](deploy.md).
+A `FROM scratch` image carrying a ~2.4 MB binary: [Deploy](deploy.md).
 
 ## Benchmarks
 
