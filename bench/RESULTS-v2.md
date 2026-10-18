@@ -538,3 +538,134 @@ scriptc build with the embedded dynamic engine enabled, or it conflates a
 the lowerings above (or hono's dispatch is restructured into the subset), the
 comparison chttp-ELF vs compiled-Hono has no measurable right-hand side, and
 the only honest compiled-Hono row is "does not run".
+## Fetch-surface cells + re-baseline (2026-10-18, Linux VM)
+
+Branch `devin/1792348542-genfetch-bench`, post-#58 dispatch (contract v4).
+New subjects: `chttp-fetch-node`/`chttp-fetch-bun` serve the canonical table
+through `app.fetch` behind a node:http bridge that builds a real `Request`
+per message; `chttp-elf-fetch` compiles `apps/chttp-elf-fetch.ts` (`app.fetchShim`
+— `new Request` is not runtime-constructible under scriptc) into a scriptc ELF.
+Same-run `vs raw-node` uses this run's raw-node column.
+
+| subject | cell | rps | vs raw-node | p50 | p99 | max | MB/s | err/t/o | non2xx |
+|---------|------|-----|-------------|-----|-----|-----|------|---------|--------|
+| chttp-node | json | 56,907 | 0.68x | 0.00 | 5.0 | 39 | 10.1 | 0/0 | 0 |
+| chttp-node | user | 60,243 | 0.71x | 0.00 | 4.0 | 22 | 10.4 | 0/0 | 0 |
+| chttp-node | echo64 | 42,396 | 0.77x | 0.00 | 5.0 | 37 | 9.2 | 0/0 | 0 |
+| chttp-node | echo1k | 36,675 | 0.72x | 1.00 | 5.0 | 31 | 41.6 | 0/0 | 0 |
+| chttp-node | deep | 61,461 | 0.84x | 0.00 | 4.0 | 19 | 10.6 | 0/0 | 0 |
+| chttp-node | files | 69,616 | 0.85x | 0.00 | 3.0 | 22 | 11.4 | 0/0 | 0 |
+| chttp-node | missing | 74,259 | 0.94x | 0.00 | 3.0 | 20 | 12.7 | 0/0 | 1356172 |
+| chttp-node | mixed | 61,747 | 0.80x | 0.00 | 4.0 | 279 | 10.7 | 0/0 | 0 |
+| chttp-fetch-node | json | 30,769 | 0.37x | 1.00 | 6.0 | 30 | 5.9 | 0/0 | 0 |
+| chttp-fetch-node | user | 32,340 | 0.38x | 1.00 | 6.0 | 21 | 6.0 | 0/0 | 0 |
+| chttp-fetch-node | echo64 | 26,562 | 0.49x | 1.00 | 7.0 | 30 | 6.2 | 0/0 | 0 |
+| chttp-fetch-node | echo1k | 26,824 | 0.52x | 2.00 | 6.0 | 26 | 30.8 | 0/0 | 0 |
+| chttp-fetch-node | deep | 38,193 | 0.52x | 1.00 | 4.0 | 20 | 7.1 | 0/0 | 0 |
+| chttp-fetch-node | files | 37,499 | 0.46x | 1.00 | 4.0 | 21 | 6.7 | 0/0 | 0 |
+| chttp-fetch-node | missing | 39,280 | 0.50x | 1.00 | 4.0 | 27 | 7.3 | 0/0 | 705130 |
+| chttp-fetch-node | mixed | 35,465 | 0.46x | 1.00 | 5.0 | 231 | 6.6 | 0/0 | 0 |
+| chttp-fetch-bun | json | 53,611 | 0.64x | 0.00 | 5.0 | 35 | 10.3 | 0/0 | 0 |
+| chttp-fetch-bun | user | 51,696 | 0.61x | 0.00 | 5.0 | 24 | 9.7 | 0/0 | 0 |
+| chttp-fetch-bun | echo64 | 46,401 | 0.85x | 1.00 | 5.0 | 24 | 10.8 | 0/0 | 0 |
+| chttp-fetch-bun | echo1k | 44,373 | 0.87x | 1.00 | 4.0 | 20 | 51.0 | 0/0 | 0 |
+| chttp-fetch-bun | deep | 54,160 | 0.74x | 0.00 | 4.0 | 23 | 10.1 | 0/0 | 0 |
+| chttp-fetch-bun | files | 48,672 | 0.60x | 0.00 | 5.0 | 27 | 8.7 | 0/0 | 0 |
+| chttp-fetch-bun | missing | 52,928 | 0.67x | 0.00 | 4.0 | 24 | 9.8 | 0/0 | 955802 |
+| chttp-fetch-bun | mixed | 50,181 | 0.65x | 0.00 | 5.0 | 406 | 9.4 | 0/0 | 0 |
+| chttp-bun | json | 95,275 | 1.14x | 0.00 | 2.0 | 19 | 17.0 | 0/0 | 0 |
+| chttp-bun | user | 94,592 | 1.12x | 0.00 | 2.0 | 23 | 16.3 | 0/0 | 0 |
+| chttp-bun | echo64 | 69,149 | 1.26x | 0.00 | 4.0 | 26 | 15.0 | 0/0 | 0 |
+| chttp-bun | echo1k | 55,307 | 1.08x | 0.00 | 4.0 | 23 | 62.8 | 0/0 | 0 |
+| chttp-bun | deep | 68,789 | 0.94x | 0.00 | 4.0 | 20 | 11.9 | 0/0 | 0 |
+| chttp-bun | files | 68,699 | 0.84x | 0.00 | 4.0 | 19 | 11.3 | 0/0 | 0 |
+| chttp-bun | missing | 69,627 | 0.88x | 0.00 | 4.0 | 41 | 11.9 | 0/0 | 1273118 |
+| chttp-bun | mixed | 54,117 | 0.70x | 0.00 | 5.0 | 246 | 9.3 | 0/0 | 0 |
+| chttp-scriptc | json | 50,651 | 0.60x | 1.00 | 4.0 | 20 | 9.0 | 0/0 | 0 |
+| chttp-scriptc | user | 43,435 | 0.51x | 1.00 | 4.0 | 23 | 7.5 | 0/0 | 0 |
+| chttp-scriptc | echo64 | 33,205 | 0.61x | 1.00 | 5.0 | 25 | 7.2 | 0/0 | 0 |
+| chttp-scriptc | echo1k | 31,549 | 0.62x | 1.00 | 5.0 | 22 | 35.8 | 0/0 | 0 |
+| chttp-scriptc | deep | 42,901 | 0.59x | 1.00 | 5.0 | 33 | 7.4 | 0/0 | 0 |
+| chttp-scriptc | files | 46,773 | 0.57x | 1.00 | 4.0 | 22 | 7.7 | 0/0 | 0 |
+| chttp-scriptc | missing | 48,965 | 0.62x | 1.00 | 4.0 | 22 | 8.4 | 0/0 | 868312 |
+| chttp-scriptc | mixed | 48,288 | 0.63x | 1.00 | 4.0 | 241 | 8.3 | 0/0 | 0 |
+| chttp-elf-fetch | json | 47,093 | 0.56x | 1.00 | 4.0 | 29 | 9.0 | 0/0 | 0 |
+| chttp-elf-fetch | user | 47,877 | 0.57x | 1.00 | 4.0 | 30 | 8.9 | 0/0 | 0 |
+| chttp-elf-fetch | echo64 | 46,459 | 0.85x | 1.00 | 4.0 | 21 | 10.7 | 0/0 | 0 |
+| chttp-elf-fetch | echo1k | 43,787 | 0.86x | 1.00 | 4.0 | 25 | 50.3 | 0/0 | 0 |
+| chttp-elf-fetch | deep | 50,411 | 0.69x | 1.00 | 4.0 | 25 | 9.4 | 0/0 | 0 |
+| chttp-elf-fetch | files | 43,461 | 0.53x | 1.00 | 4.0 | 38 | 7.7 | 0/0 | 0 |
+| chttp-elf-fetch | missing | 47,584 | 0.60x | 1.00 | 4.0 | 30 | 8.8 | 0/0 | 852084 |
+| chttp-elf-fetch | mixed | 46,661 | 0.61x | 1.00 | 4.0 | 259 | 8.7 | 0/0 | 0 |
+| raw-node | json | 83,840 | 1.00x | 0.00 | 3.0 | 28 | 13.8 | 0/0 | 0 |
+| raw-node | user | 84,437 | 1.00x | 0.00 | 3.0 | 21 | 13.4 | 0/0 | 0 |
+| raw-node | echo64 | 54,715 | 1.00x | 0.00 | 4.0 | 20 | 11.1 | 0/0 | 0 |
+| raw-node | echo1k | 51,211 | 1.00x | 0.00 | 5.0 | 22 | 57.4 | 0/0 | 0 |
+| raw-node | deep | 73,088 | 1.00x | 0.00 | 4.0 | 25 | 11.6 | 0/0 | 0 |
+| raw-node | files | 81,525 | 1.00x | 0.00 | 3.0 | 25 | 12.2 | 0/0 | 0 |
+| raw-node | missing | 79,275 | 1.00x | 0.00 | 3.0 | 23 | 12.4 | 0/0 | 1456341 |
+| raw-node | mixed | 77,067 | 1.00x | 0.00 | 4.0 | 236 | 12.2 | 0/0 | 0 |
+| raw-scriptc | json | 94,645 | 1.13x | 0.00 | 2.0 | 24 | 15.5 | 0/0 | 0 |
+| raw-scriptc | user | 70,067 | 0.83x | 0.00 | 4.0 | 36 | 11.1 | 0/0 | 0 |
+| raw-scriptc | echo64 | 71,363 | 1.30x | 0.00 | 4.0 | 33 | 14.5 | 0/0 | 0 |
+| raw-scriptc | echo1k | 68,616 | 1.34x | 0.00 | 4.0 | 28 | 76.9 | 0/0 | 0 |
+| raw-scriptc | deep | 86,389 | 1.18x | 0.00 | 3.0 | 27 | 13.7 | 0/0 | 0 |
+| raw-scriptc | files | 89,632 | 1.10x | 0.00 | 3.0 | 23 | 13.4 | 0/0 | 0 |
+| raw-scriptc | missing | 90,859 | 1.15x | 0.00 | 3.0 | 21 | 14.2 | 0/0 | 1619221 |
+| raw-scriptc | mixed | 60,795 | 0.79x | 0.00 | 4.0 | 253 | 9.6 | 0/0 | 0 |
+| hono-bun | json | 98,219 | 1.17x | 0.00 | 3.0 | 25 | 11.7 | 0/0 | 0 |
+| hono-bun | user | 100,160 | 1.19x | 0.00 | 3.0 | 22 | 11.4 | 0/0 | 0 |
+| hono-bun | echo64 | 97,291 | 1.78x | 0.00 | 2.0 | 23 | 16.7 | 0/0 | 0 |
+| hono-bun | echo1k | 92,832 | 1.81x | 0.00 | 3.0 | 18 | 101.1 | 0/0 | 0 |
+| hono-bun | deep | 97,771 | 1.34x | 0.00 | 3.0 | 17 | 11.1 | 0/0 | 0 |
+| hono-bun | files | 102,699 | 1.26x | 0.00 | 2.0 | 20 | 12.1 | 0/0 | 0 |
+| hono-bun | missing | 105,621 | 1.33x | 0.00 | 2.0 | 21 | 13.8 | 0/0 | 1899699 |
+| hono-bun | mixed | 99,392 | 1.29x | 0.00 | 3.0 | 225 | 11.3 | 0/0 | 0 |
+
+### Fetch-surface cross-compares (same-run medians)
+
+| compare | json | user | echo64 | echo1k | deep | files | missing | mixed |
+|---------|------|------|--------|--------|------|-------|---------|-------|
+| chttp-fetch-node / chttp-node | 54% | 54% | 63% | 73% | 62% | 54% | 53% | 57% |
+| chttp-fetch-bun / chttp-bun | 56% | 55% | 67% | 80% | 79% | 71% | 76% | 93% |
+| chttp-elf-fetch / chttp-scriptc | 93% | 110% | 140% | 139% | 118% | 93% | 97% | 97% |
+| chttp-bun / hono-bun | 97% | 94% | 71% | 60% | 70% | 67% | 66% | 54% |
+
+### What the fetch cells say
+
+- **The dispatch arm is not the gap.** `chttp-elf-fetch` (fetchShim primitives →
+  same `_dispatchPrim` → `FetchResponseSink` → respond callback) lands at
+  93-140% of `chttp-scriptc` — at parity or ahead on every cell, no Request/
+  Response construction anywhere on that path. Post-#58 the fetch-shaped
+  dispatch costs nothing measurable.
+- **`chttp-fetch-node` runs at 53-73% of `chttp-node`** — the issue's 80-95%
+  prediction does not hold on the Node bridge. The cost is upstream of
+  dispatch: undici `new Request` + `Headers` construction per message and
+  `new Response`/`resp.text()` re-buffering on the way out (~2 wrapped
+  object constructions + 2 stream bufferings per request vs one
+  `res.writeHead`/`res.end`). `chttp-fetch-bun` lands at 55-93% of
+  `chttp-bun` — same shape, smaller penalty (Bun's Web primitives are
+  cheaper), confirming the gap is runtime Web-object churn, not dispatch.
+- **chttp-bun is at 94-97% of hono-bun on json/user**, 54-71% elsewhere
+  (hono-bun's flat ~97-105k across cells continues to hold).
+- **Controls did not stay flat on every cell**: raw-node is within ±5% on
+  user/missing (+0.2%/-1.3% vs v2) but down 13-22% on echo64/echo1k/deep;
+  raw-scriptc json +4% but user -29%. Treat absolute deltas vs the v2 table
+  as noise-bound (rep spread this run reached 77-97k on raw-scriptc json);
+  same-run `vs raw-node` ratios and the cross-compares above are the stable
+  reads.
+
+### Caveats
+
+- **Fetch-surface non-2xx cells**: `missing` counts 404s by design
+  (~705k-956k non-2xx on fetch subjects — the cell hammers unmounted paths;
+  totals scale with throughput, not a regression).
+- **Request bodies are fully buffered** on both fetch bridges before
+  dispatch — `chttp-fetch.ts` concatenates `data` chunks into the Request
+  body, `chttp-elf-fetch.ts` into the fetchShim body param; the contract
+  resolves the body before dispatch, so streaming request bodies are not
+  exercised. `echo1k` is the largest buffered-body cell.
+- `new Request` is not runtime-constructible under scriptc (module-level
+  globals only) — the ELF cell enters through `app.fetchShim`, which skips
+  Request/Response construction entirely; it is not a like-for-like of
+  `chttp-fetch-node` (that's the point of the gap analysis above).
