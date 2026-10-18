@@ -19,4 +19,12 @@ The tag push triggers `.github/workflows/release.yml`. It verifies every package
 
 ## Retrying
 
-npm cannot roll back. If a publish fails part way, fix the cause and re-run the failed job. Do not re-tag.
+npm cannot roll back. If a publish fails part way, fix the cause and re-run the failed job. Do not re-tag once anything has been published.
+
+Things learned in the v0.2.0 release:
+
+- A tag runs the workflow file as it was at the tagged commit. A workflow fix after a failed run therefore needs the tag moved onto the fixed commit. That is only safe when nothing was published and no GitHub release exists (check `npm view @chttp/<name>@<version>` for every package and `gh release list`).
+- Each job installs from scratch. A step that `verify` needs (like the scriptc exec-bit `chmod`) is not inherited by `publish`, so `publish` builds only `./packages/*`.
+- A brand new package name can read as 404 from the registry for about five minutes after a successful publish. Trust the `Published package` line in the log, wait, then check again. Do not re-run `publish` inside that window: the already-published skip relies on `npm view`, which can lag the same way.
+- `pnpm versioning.ignore` takes exact package names, not globs.
+- Tags are not always ancestors of main (v0.1.0 is not), so `release-notes.sh` picks the previous tag by version order instead of `git describe`.
