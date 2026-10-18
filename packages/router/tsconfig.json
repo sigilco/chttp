@@ -13,5 +13,5 @@
     "skipLibCheck": false,
     "forceConsistentCasingInFileNames": true,
   },
-  "include": ["src/index.ts", "src/gen.ts"],
+  "include": ["src/index.ts", "src/gen.ts", "src/client.ts"],
 }

@@ -38,6 +38,14 @@ These are hard bans. The full rationale lives in `ARCHITECTURE.md` section 0.
 
 `contracts/route-contract.md` is the frozen seam contract between runtime and generated dispatch. Do not diverge from it.
 
+### Typed client (`src/client.ts`)
+
+- Generic method calls dispatch only through `ClientCore` receivers — generic signatures on the `Client<App>` interface are signature-only to scriptc (SC1090). ELF consumers bind `const c: ClientCore = createClient(u)`; gate apps do the same.
+- `Record<ParamKey<P>, string>` may appear only in the interface's `.d.ts` surface — any program code that names or converts it (assignment, `as`, field copy) fails SC2003/SC2009. That's why class method params take `ClientInputCore`, and `ParamKey` checking is Node-side only.
+- Reading a missing record key throws at runtime under scriptc ("record has no key" — typed slots can't represent undefined). Probe optional headers/fields with `Object.prototype.hasOwnProperty.call(rec, k)` before indexing, matching ReqView.
+- Overload signatures don't monomorphize (only the implementation signature does) — don't use them for subset code.
+- `node:tls` `connect(port, host, {servername, rejectUnauthorized})` lowers as of 0.3.3 (verified in the gate); `new URL` lowers.
+
 ## Conventions
 
 - Conventional commits, atomic commits (one logical change each).

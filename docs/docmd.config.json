@@ -57,6 +57,10 @@
     {
      "title": "Errors",
      "path": "/errors"
+    },
+    {
+     "title": "Typed client",
+     "path": "/client"
     }
    ]
   },
