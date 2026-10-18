@@ -44,6 +44,19 @@ export class ResponseSink {
     return false;
   }
   destroy(): void {}
+  // Read-back accessors backing Ctx.res (issue #57): a uniform status /
+  // header view over both surfaces so `c.res.status` resolves identically
+  // under app.handler and app.fetch. Base defaults are no-ops like the
+  // write-side members; concrete sinks override.
+  statusOf(): number {
+    return 200;
+  }
+  headerOf(_k: string): string | null {
+    return null;
+  }
+  headersMap(): { [k: string]: string } {
+    return {};
+  }
   // Underlying ServerResponse when the sink wraps one; null otherwise
   // (FetchResponseSink). A method rather than a cast so callers can
   // discriminate sink flavors without `instanceof`/`as` — both are
@@ -153,6 +166,27 @@ export class NodeResponseSink extends ResponseSink {
     } catch (e) {
       // socket already gone
     }
+  }
+
+  statusOf(): number {
+    return this._status;
+  }
+
+  headerOf(k: string): string | null {
+    const v = this._set[String(k).toLowerCase()];
+    if (v === undefined) {
+      return null;
+    }
+    return v;
+  }
+
+  headersMap(): { [k: string]: string } {
+    const out: { [k: string]: string } = {};
+    const keys = Object.keys(this._set);
+    for (let i = 0; i < keys.length; i++) {
+      out[keys[i]] = this._set[keys[i]];
+    }
+    return out;
   }
 
   nodeRes(): ServerResponse | null {
@@ -312,6 +346,28 @@ export class FetchResponseSink extends ResponseSink {
 
   isHeadersSent(): boolean {
     return this.headersSent;
+  }
+
+  statusOf(): number {
+    return this.status;
+  }
+
+  headerOf(k: string): string | null {
+    const kk = String(k).toLowerCase();
+    for (let i = 0; i < this.hdrKeys.length; i++) {
+      if (this.hdrKeys[i].toLowerCase() === kk) {
+        return this.hdrVals[i];
+      }
+    }
+    return null;
+  }
+
+  headersMap(): { [k: string]: string } {
+    const out: { [k: string]: string } = {};
+    for (let i = 0; i < this.hdrKeys.length; i++) {
+      out[this.hdrKeys[i]] = this.hdrVals[i];
+    }
+    return out;
   }
 
   destroy(): void {
