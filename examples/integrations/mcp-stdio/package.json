@@ -1,0 +1,13 @@
+{
+  "name": "chttp-example-mcp-stdio",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@chttp/mcp": "workspace:*",
+    "@chttp/val": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  }
+}

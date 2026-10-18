@@ -215,7 +215,7 @@ app.post("/order", (c) => {
 
 ## 🧩 Ecosystem
 
-- [sigilco/cutils](https://github.com/sigilco/cutils): utility packages that work with chttp and the scriptc subset — `@cutils/sqlite` (embedded SQLite via a C FFI shim), `@chttp/cache` (LRU/TTL in-memory cache) and `@chttp/mcp` (JSON-RPC 2.0 MCP server)
+- [sigilco/cutils](https://github.com/sigilco/cutils): utility packages that work with chttp and the scriptc subset — `@cutils/sqlite` (embedded SQLite via a C FFI shim) and `@chttp/cache` (LRU/TTL in-memory cache)
 
 ## 🤖 Agent skills
 

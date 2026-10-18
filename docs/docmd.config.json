@@ -107,6 +107,14 @@
      "path": "/unplugin"
     },
     {
+     "title": "MCP server",
+     "path": "/mcp"
+    },
+    {
+     "title": "Auth primitives",
+     "path": "/auth"
+    },
+    {
      "title": "Native FFI",
      "path": "/native"
     }
