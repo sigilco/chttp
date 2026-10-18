@@ -8,7 +8,7 @@
 import type { ServerResponse } from "node:http";
 import type { Socket } from "node:net";
 import { Writable } from "node:stream";
-import type { Ctx } from "@chttp/router/src/index.ts";
+import type { Ctx, ResponseSink } from "@chttp/router/src/index.ts";
 
 // UTF-8 byte length of s (surrogate pairs count 4, lone surrogates 3).
 function utf8len(s: string): number {
@@ -192,6 +192,39 @@ export class ResWriter extends Writable {
   }
 }
 
+// Write-side seam for the fetch surface: sendChunk forwards into
+// ResponseSink.write(), which buffers chunks until the sink hands the
+// ReadableStream controller over at toResponse() and enqueues straight
+// into it after. close() ends the stream the writeHead() armed. The
+// pending-bytes window cap in ChunkStream is the only slow-consumer
+// policy here — a ReadableStream exposes no writable-queue surface the
+// sink could read backpressure from.
+export class FetchStreamWriter {
+  sink: ResponseSink;
+  _ended: boolean;
+
+  constructor(sink: ResponseSink) {
+    this.sink = sink;
+    this._ended = false;
+  }
+
+  sendChunk(chunk: string): void {
+    if (this._ended) {
+      return;
+    }
+    this.sink.write(chunk);
+  }
+
+  // Queue-drain + end stubs matching the ResWriter surface ChunkStream
+  // calls — there is no internal queue on the fetch arm.
+  flushQ(): void {}
+
+  close(): void {
+    this._ended = true;
+    this.sink.endStream();
+  }
+}
+
 // Base writer: tracks closed state, abort callbacks and the pending-bytes cap.
 //
 // scriptc < 0.3.2 could not observe backpressure (write() result, "drain"
@@ -201,7 +234,7 @@ export class ResWriter extends Writable {
 // fail-safe: a stream that writes more than maxPending bytes inside one
 // windowMs window is still treated as a slow consumer and closed.
 export class ChunkStream {
-  res: ServerResponse;
+  res: ServerResponse | null;
   closed: boolean;
   maxPending: number;
   windowMs: number;
@@ -209,9 +242,10 @@ export class ChunkStream {
   _windowStart: number;
   _abortFns: Array<() => void>;
   _fired: boolean;
-  _writer: ResWriter;
+  _writer: ResWriter | null;
+  _fwriter: FetchStreamWriter | null;
 
-  constructor(res: ServerResponse) {
+  constructor(res: ServerResponse | null, sink?: ResponseSink | null) {
     this.res = res;
     this.closed = false;
     this.maxPending = 1048576;
@@ -220,7 +254,19 @@ export class ChunkStream {
     this._windowStart = Date.now();
     this._abortFns = [];
     this._fired = false;
-    this._writer = new ResWriter(res);
+    const s = sink === null || sink === undefined ? null : sink;
+    if (res !== null) {
+      this._writer = new ResWriter(res);
+      this._fwriter = null;
+    } else if (s !== null) {
+      this._writer = null;
+      this._fwriter = new FetchStreamWriter(s);
+    } else {
+      // Bare test fakes: neither surface — writes/close become no-ops,
+      // same toleration the _writer !== undefined guards already gave.
+      this._writer = null;
+      this._fwriter = null;
+    }
   }
 
   // Raw chunk write. Returns false once the stream is closed, including when
@@ -239,7 +285,15 @@ export class ChunkStream {
       this.close();
       return false;
     }
-    this._writer.sendChunk(chunk);
+    const fw = this._fwriter;
+    if (fw !== null) {
+      fw.sendChunk(chunk);
+      return true;
+    }
+    const w = this._writer;
+    if (w !== null && w !== undefined) {
+      w.sendChunk(chunk);
+    }
     return true;
   }
 
@@ -252,8 +306,20 @@ export class ChunkStream {
       return;
     }
     this.closed = true;
-    this._writer.flushQ();
-    this._writer.close();
+    const fw = this._fwriter;
+    if (fw !== null) {
+      fw.flushQ();
+      fw.close();
+      // No 'close' event exists on the fetch surface — fire the abort
+      // hooks deterministically here (idempotent via _fired).
+      this._onClose();
+      return;
+    }
+    const w = this._writer;
+    if (w !== null && w !== undefined) {
+      w.flushQ();
+      w.close();
+    }
   }
 
   // Runs fn once when the connection closes, whether the client left or
@@ -272,8 +338,13 @@ export class ChunkStream {
     this._fired = true;
     this.closed = true;
     // Tests build bare prototype fakes without a writer; guard for those.
-    if (this._writer !== undefined) {
-      this._writer._ended = true;
+    const w = this._writer;
+    if (w !== null && w !== undefined) {
+      w._ended = true;
+    }
+    const fw = this._fwriter;
+    if (fw !== null && fw !== undefined) {
+      fw._ended = true;
     }
     const fns = this._abortFns;
     this._abortFns = [];
@@ -320,29 +391,25 @@ export class TextStream extends ChunkStream {
   }
 }
 
-function open(c: Ctx, contentType: string, extra: string): ServerResponse {
-  // Stream only runs through the Node handler surface (the Fetch surface
-  // produces a ReadableStream Response, which is a separate adapter).
-  // Direct field access avoids the nullable c.res getter — c._nodeRes is
-  // null only on the Fetch path, where streamSSE/streamText are not used.
-  const res = c._nodeRes as ServerResponse;
+// Commits status + stream headers through the sink's writeHead seam, so
+// the same call opens a chunked response on both surfaces: res.writeHead
+// + flushHeaders under Node, ReadableStream arming under app.fetch.
+// `connection` stays Node-only — it is a forbidden header name on the
+// Web Standards surface (Response init would drop it).
+function open(c: Ctx, contentType: string, extra: string): void {
+  const hdrs: string[] = ["content-type", contentType];
   if (extra === "sse") {
-    res.writeHead(res.statusCode, {
-      "content-type": contentType,
-      "cache-control": "no-cache, no-transform",
-      connection: "keep-alive",
-      "x-accel-buffering": "no",
-    });
+    hdrs.push("cache-control", "no-cache, no-transform");
+    if (c._nodeRes !== null) {
+      hdrs.push("connection", "keep-alive");
+    }
+    hdrs.push("x-accel-buffering", "no");
   } else {
-    res.writeHead(res.statusCode, {
-      "content-type": contentType,
-      "cache-control": "no-cache",
-      "x-accel-buffering": "no",
-    });
+    hdrs.push("cache-control", "no-cache");
+    hdrs.push("x-accel-buffering", "no");
   }
-  res.flushHeaders();
+  c.sink.writeHead(c.sink.statusOf(), hdrs);
   c.sent = true;
-  return res;
 }
 
 // Starts a text/event-stream response and returns fn(stream). A promise
@@ -369,16 +436,25 @@ function wire(res: ServerResponse, s: ChunkStream): void {
 }
 
 export function streamSSE(c: Ctx, fn: (s: SSEStream) => unknown): unknown {
-  const res = open(c, "text/event-stream; charset=utf-8", "sse");
-  const s = new SSEStream(res);
-  wire(res, s);
-  return fn(s);
+  open(c, "text/event-stream; charset=utf-8", "sse");
+  const res = c._nodeRes;
+  if (res !== null) {
+    const s = new SSEStream(res);
+    wire(res, s);
+    return fn(s);
+  }
+  // Fetch arm: writes feed the sink's ReadableStream instead of a socket.
+  return fn(new SSEStream(null, c.sink));
 }
 
 // Starts a chunked text/plain response and returns fn(stream).
 export function streamText(c: Ctx, fn: (s: TextStream) => unknown): unknown {
-  const res = open(c, "text/plain; charset=utf-8", "text");
-  const s = new TextStream(res);
-  wire(res, s);
-  return fn(s);
+  open(c, "text/plain; charset=utf-8", "text");
+  const res = c._nodeRes;
+  if (res !== null) {
+    const s = new TextStream(res);
+    wire(res, s);
+    return fn(s);
+  }
+  return fn(new TextStream(null, c.sink));
 }
