@@ -26,10 +26,11 @@ export default { fetch: StreamableHttpTransport.route(server) };
 - Auto-wrap ladder for tool returns: strings become text blocks, plain objects become dual `content` + `structuredContent`, a full `CallToolResult` passes through, thrown errors become `isError` results.
 - `StreamableHttpTransport` — POST JSON-RPC plus an SSE stream (`GET ?stream=progress`) carrying `notifications/progress`/`notifications/message` while tools run.
 - Progress + log notifications through a server-level sink registry (`ctx.progress`, `ctx.log`, `logging/setLevel` severity filter).
+- `@chttp/mcp/client` — typed client on a `./client` subpath: `Client` + `toolDef`/`resourceDef`/`promptDef` schema-first descriptors (the same `ToolDef` registers on `server.toolDef`), three transports (`fetch`, `node:net`/`node:tls` HTTP/1.1+SSE for the ELF path, stdio), `callTool`/`call`/`listTools`/`readResource`/`getPrompt`, progress notification handlers, `JsonRpcError` passthrough.
 
 ## Docs
 
-Per-package pages live under [`packages/mcp/docs/`](https://github.com/sigilco/chttp/tree/main/packages/mcp/docs): integration, schema seams, transports, Streamable-HTTP coverage (what v1 does and deliberately skips), the auto-wrap ladder, and scriptc-subset authoring notes. Examples: [`packages/mcp/examples/todo-mcp`](https://github.com/sigilco/chttp/tree/main/packages/mcp/examples/todo-mcp) and [`examples/integrations/mcp-stdio`](https://github.com/sigilco/chttp/tree/main/examples/integrations/mcp-stdio).
+Per-package pages live under [`packages/mcp/docs/`](https://github.com/sigilco/chttp/tree/main/packages/mcp/docs): integration, schema seams, transports, the client, Streamable-HTTP coverage (what v1 does and deliberately skips), the auto-wrap ladder, and scriptc-subset authoring notes. Examples: [`packages/mcp/examples/todo-mcp`](https://github.com/sigilco/chttp/tree/main/packages/mcp/examples/todo-mcp) and [`examples/integrations/mcp-stdio`](https://github.com/sigilco/chttp/tree/main/examples/integrations/mcp-stdio).
 
 ## Status
 

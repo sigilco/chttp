@@ -194,6 +194,37 @@ export interface ToolOpts<Out extends StandardSchemaV1 | null = null> {
   emit?: JsonSchemaEmitter;
 }
 
+// ---------- shared descriptors (client calls + server registration) ----------
+//
+// The typed-RPC story: scriptc can't lower a Proxy, so a descriptor carries
+// the schemas and both sides consume it — `client.call(def, args)` validates
+// args/result, `server.toolDef(def, handler)` registers the same name/schema
+// pair. `I`/`O` are phantom markers the `toolDef`/`resourceDef`/`promptDef`
+// helpers fill from the schemas' InferInput/InferOutput.
+export interface ToolDef<I = unknown, O = CallToolResult> {
+  name: string;
+  input?: StandardSchemaV1 | null;
+  output?: StandardSchemaV1 | null;
+}
+
+export interface ResourceDef<O = ResourceContents[]> {
+  uri: string;
+  name?: string;
+  mimeType?: string;
+  output?: StandardSchemaV1 | null;
+}
+
+export interface GetPromptResult {
+  description?: string;
+  messages: { role: string; content: { [k: string]: unknown } }[];
+}
+
+export interface PromptDef<O = GetPromptResult> {
+  name: string;
+  args?: PromptArgument[];
+  output?: StandardSchemaV1 | null;
+}
+
 export interface ResourceOpts {
   name?: string;
   description?: string;

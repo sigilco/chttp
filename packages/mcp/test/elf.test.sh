@@ -46,4 +46,31 @@ if "$OUT" '{bad json' 2>/dev/null; then
   fail "malformed JSON should exit non-zero"
 fi
 
+# ---------- client smoke (socket HTTP transport inside the ELF) ----------
+
+OUTC="${TMPDIR:-/tmp}/chttp-mcp-elf-client-smoke"
+"$BIN" build "$PKG/test/elf-client-smoke.ts" -o "$OUTC" >/dev/null \
+  || fail "scriptc build (client)"
+echo "build OK (client)"
+
+res=$(timeout 15 "$OUTC")
+printf '%s\n' "$res" | grep -q 'server: elf-client-smoke' \
+  || fail "initialize: $res"
+printf '%s\n' "$res" | grep -q 'session: sess-1' \
+  || fail "session header: $res"
+printf '%s\n' "$res" | grep -q 'call: {"structured":{"hi":7}}' \
+  || fail "call: $res"
+printf '%s\n' "$res" | grep -q 'resource: contents' \
+  || fail "resource: $res"
+printf '%s\n' "$res" | grep -q 'tools: 1' \
+  || fail "tools list: $res"
+printf '%s\n' "$res" | grep -q 'validation: rejected' \
+  || fail "input validation: $res"
+printf '%s\n' "$res" | grep -q 'rpcErr: passthrough' \
+  || fail "error passthrough: $res"
+printf '%s\n' "$res" | grep -q 'progress: notifications/progress' \
+  || fail "progress stream: $res"
+printf '%s\n' "$res" | grep -q 'elf-client-smoke OK' \
+  || fail "client smoke end: $res"
+
 echo "elf.test OK"

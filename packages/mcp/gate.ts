@@ -31,6 +31,53 @@ import {
   wrapToolReturn,
 } from "./src/index.ts";
 import type { ContentBlock, JsonSchemaObject, StandardSchemaV1 } from "./src/index.ts";
+import {
+  Client,
+  ClientToolError,
+  ClientTransport,
+  ClientValidationError,
+  connectTarget,
+  decodeSseEvents,
+  dechunk,
+  FetchClientTransport,
+  HttpClientTransport,
+  HttpResponse,
+  parseHttpResponse,
+  parseHttpTarget,
+  promptDef,
+  resourceDef,
+  SockReader,
+  SseDecoder,
+  StdioClientTransport,
+  toolDef,
+} from "./src/client/index.ts";
+import type { JsonRpcRequest, JsonRpcResponse } from "./src/index.ts";
+import type { ToolDef } from "./src/client/index.ts";
+
+// A transport stub for the gate: records requests, answers canned
+// envelopes — the socket/fetch transports get their own coverage below.
+class GateTransport extends ClientTransport {
+  sent: JsonRpcRequest[] = [];
+  response: JsonRpcResponse = { jsonrpc: "2.0", id: 0, result: {} };
+  eventsOpened = 0;
+  // Signatures must match the base exactly (SC1090); field writes from
+  // outside the class are also refused, hence setResponse.
+  setResponse(r: JsonRpcResponse): void {
+    this.response = r;
+  }
+  request(req: JsonRpcRequest, timeoutMs: number): Promise<JsonRpcResponse> {
+    void timeoutMs;
+    this.sent.push(req);
+    const r = this.response;
+    r.id = req.id === undefined ? 0 : req.id;
+    return Promise.resolve(r);
+  }
+  openEvents(timeoutMs: number): Promise<void> {
+    void timeoutMs;
+    this.eventsOpened += 1;
+    return Promise.resolve();
+  }
+}
 
 // A minimal conforming validator for gate purposes (the seam is structural).
 function fakeSchema(): StandardSchemaV1 {
@@ -166,6 +213,110 @@ export async function main(): Promise<string> {
   const vf = validatorFor(fakeSchema());
   const v2 = await vf({ y: 2 });
 
+  // ---------- client coverage ----------
+  const gate = new GateTransport();
+  const client = new Client({ name: "gate-client", version: "0.1.0", transport: gate });
+  client.onProgress((n) => {
+    void n.method;
+  });
+  client.onNotification((n) => {
+    void n.method;
+  });
+  gate.setResponse({
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      protocolVersion: "2025-06-18",
+      capabilities: { tools: {} },
+      serverInfo: { name: "gate-server", version: "0.1.0" },
+    },
+  });
+  const init = await client.connect();
+  gate.setResponse({
+    jsonrpc: "2.0",
+    id: 2,
+    result: { tools: [{ name: "sum", inputSchema: {} }] },
+  });
+  const tools = await client.listTools();
+  gate.setResponse({
+    jsonrpc: "2.0",
+    id: 3,
+    result: { content: [{ type: "text", text: "3" }], structuredContent: { sum: 3 } },
+  });
+  const sumDef = toolDef("sum", fakeSchema(), fakeSchema());
+  const sumOut = await client.call(sumDef, { a: 1 });
+  const rawOut = await client.callTool("sum", { a: 1 });
+  gate.setResponse({
+    jsonrpc: "2.0",
+    id: 4,
+    result: { resources: [{ uri: "mcp://x", name: "x" }] },
+  });
+  const resList = await client.listResources();
+  const prmList = await client.listPrompts();
+  gate.setResponse({
+    jsonrpc: "2.0",
+    id: 5,
+    result: { contents: [{ uri: "mcp://x", mimeType: "text/plain", text: "hi" }] },
+  });
+  const contents = await client.readResource("mcp://x");
+  const resDef = resourceDef("mcp://x", fakeSchema());
+  gate.setResponse({
+    jsonrpc: "2.0",
+    id: 6,
+    result: { messages: [{ role: "user", content: {} }] },
+  });
+  const prm = await client.getPrompt("greet", { who: "x" });
+  const prmDef = promptDef("greet", undefined, fakeSchema());
+  await client.ping();
+  await client.setLogLevel("warning");
+  gate.setResponse({ jsonrpc: "2.0", id: 7, error: { code: -32601, message: "nope" } });
+  let rpcErr = "";
+  try {
+    await client.callTool("missing", {});
+  } catch (e) {
+    rpcErr = String(e);
+  }
+  // Descriptor-driven server registration shares the same ToolDef.
+  const regServer = new Server({ name: "reg", version: "0.1.0", emitJsonSchema: emit });
+  regServer.toolDef(
+    sumDef as ToolDef<unknown, unknown> & { input: StandardSchemaV1 },
+    async (i) => i,
+  );
+  tool(
+    regServer,
+    sumDef as ToolDef<unknown, unknown> & { input: StandardSchemaV1 },
+    async (i) => i,
+  );
+  // Transport constructors + pure helpers.
+  const tgt = parseHttpTarget("http://localhost:9/mcp?x=1");
+  const tgtTls = parseHttpTarget("https://example.com/");
+  const httpT = new HttpClientTransport({ url: "http://localhost:9/mcp" });
+  httpT.setOnNotification((n) => {
+    void n.method;
+  });
+  const fetchT = new FetchClientTransport({ url: "http://localhost:9/mcp" });
+  const stdioT = new StdioClientTransport({ command: "echo", args: ["x"] });
+  const dec1 = new SseDecoder();
+  const evs = dec1.feed('data: {"a":1}\n\nevent: ping\ndata: x\ndata: y\n\n');
+  const evs2 = dec1.end();
+  const evs3 = decodeSseEvents(": ka\ndata: z\n\n");
+  const resp = parseHttpResponse(
+    new TextEncoder().encode(
+      "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\nx-a: b\r\n\r\n{}",
+    ),
+  );
+  const dech = dechunk(new TextEncoder().encode("4\r\nabcd\r\n0\r\n\r\n"));
+  const hr: HttpResponse = { status: 200, headers: {}, body: "b" };
+  const sr = new SockReader();
+  void sr;
+  void connectTarget;
+  await client.close();
+  await stdioT.close();
+  await httpT.close();
+  void fetchT;
+  const cve = new ClientValidationError("bad args", [{ m: 1 }]);
+  const cte = new ClientToolError("tool failed", { isError: true });
+
   return (
     out.join("\n") +
     String(notif) +
@@ -184,6 +335,28 @@ export async function main(): Promise<string> {
     s2 +
     s3 +
     JSON.stringify(v) +
-    JSON.stringify(v2)
+    JSON.stringify(v2) +
+    JSON.stringify(init) +
+    JSON.stringify(tools) +
+    JSON.stringify(sumOut) +
+    JSON.stringify(rawOut) +
+    JSON.stringify(resList) +
+    JSON.stringify(prmList) +
+    JSON.stringify(contents) +
+    JSON.stringify(prm) +
+    rpcErr +
+    String(resDef.uri) +
+    String(prmDef.name) +
+    String(tgt.port) +
+    String(tgtTls.port) +
+    String(evs.length) +
+    String(evs2.length) +
+    String(evs3.length) +
+    JSON.stringify(resp.headers) +
+    String(dech.length) +
+    String(hr.status) +
+    String(cve.issuesJson) +
+    String(cte.code) +
+    String(gate.eventsOpened)
   );
 }

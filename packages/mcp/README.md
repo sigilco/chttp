@@ -30,6 +30,7 @@ export default {
 - `StreamableHttpTransport` — POST request/response + SSE `GET ?stream=progress` for `notifications/progress`, on the `Request`/`Response` surface. `Mcp-Session-Id` is set-but-unused in v1.
 - The auto-wrap ladder for tool returns (string → text block, `ContentBlock`/`ContentBlock[]`/`CallToolResult` passthrough, plain object → dual content, `null` → empty, throw → `isError`).
 - `encodeSseEvent`/`encodeSseComment`/`encodeSseRetry`, envelope helpers (`parseBody`, `parseRequest`, `resultResponse`, `errorResponse`, `errorFor`, `notification`), progress/log notification builders, `runStdValidate`/`validatorFor`.
+- `@chttp/mcp/client` — a typed client on the `./client` subpath: `Client` + `toolDef`/`resourceDef`/`promptDef` schema descriptors shared with server registration (`server.toolDef(def, handler)`), over `FetchClientTransport`, a `node:net`/`node:tls` HTTP/1.1+SSE transport for the ELF path, and `StdioClientTransport` (Node-only). See [docs/client.md](docs/client.md).
 
 Docs: [docs/](docs/) — [integration](docs/integration.md), [schema seams](docs/schema.md), [transport](docs/transport.md), [streamable-http coverage](docs/streamable-http-coverage.md), [auto-wrap](docs/auto-wrap.md), [scriptc subset notes](docs/subset-quirks.md). Stdio wiring example: [`examples/integrations/mcp-stdio/`](../../examples/integrations/mcp-stdio/).
 
