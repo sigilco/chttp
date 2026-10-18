@@ -129,10 +129,10 @@ The contract majors with the package: any change to a member listed in the stabl
 
 ## Contract versioning
 
-`ROUTE_CONTRACT_VERSION` (currently `3`) is a plain number exported from `chttp` (defined in `src/gen.ts`, re-exported by `src/index.ts`). It exists so a stale generated module can never silently serve requests against a runtime that expects a different emit shape:
+`ROUTE_CONTRACT_VERSION` (currently `4`) is a plain number exported from `chttp` (defined in `src/gen.ts`, re-exported by `src/index.ts`). It exists so a stale generated module can never silently serve requests against a runtime that expects a different emit shape:
 
 - **Lives in chttp.** The runtime is the source of truth; the constant is a plain `const` number, subset-clean.
-- **Stamped into gen files.** Emitters write the same number as a literal — `export const ROUTE_CONTRACT_VERSION = 3;` in the module header next to the Source comment, and `ROUTE_CONTRACT_VERSION = 3` as an instance field on the emitted `CompiledRoutes` class (assigned after `super()`, shadowing the `GenDispatch` default). The gen file stays standalone: no import of the version, just the literal.
+- **Stamped into gen files.** Emitters write the same number as a literal — `export const ROUTE_CONTRACT_VERSION = 4;` in the module header next to the Source comment, and `ROUTE_CONTRACT_VERSION = 4` as an instance field on the emitted `CompiledRoutes` class (assigned after `super()`, shadowing the `GenDispatch` default). The gen file stays standalone: no import of the version, just the literal.
 - **Validated at `withDispatch`.** If the dispatch object exposes a numeric `ROUTE_CONTRACT_VERSION` that differs from the runtime's, `app.withDispatch(d)` throws immediately, naming both versions. A missing stamp is accepted (dispatches that predate versioning).
 - **Bump semantics.** Any breaking change to this contract — member shapes, dispatch obligations, the emitted-module grammar — bumps the number. Bump `chttp`'s export and `@chttp/unplugin`'s mirrored constant (`packages/unplugin/src/contract.ts`, asserted equal by test) in the same commit; a regenerated module then carries the new stamp.
 
@@ -142,9 +142,9 @@ import { GenDispatch, ROUTE_CONTRACT_VERSION } from '@chttp/router'
 app.withDispatch(new CompiledRoutes(app)) // throws on stamp mismatch
 
 // emitted header (.chttp/routes.gen.ts)
-export const ROUTE_CONTRACT_VERSION = 3
+export const ROUTE_CONTRACT_VERSION = 4
 export class CompiledRoutes extends GenDispatch {
-  ROUTE_CONTRACT_VERSION = 3
+  ROUTE_CONTRACT_VERSION = 4
   // ...
 }
 ```

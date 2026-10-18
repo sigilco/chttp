@@ -18,6 +18,15 @@
 import type { ServerResponse } from "node:http";
 import type { ResView } from "./index.ts";
 
+// View of the ReadableStream controller FetchResponseSink feeds when a
+// handler opened streaming mode via writeHead(). Host objects can't be
+// class field types (SC1090), so the controller is held through this
+// interface view — same trick as WebReqView/ResView in index.ts.
+export interface StreamCtl {
+  enqueue(b: Uint8Array): void;
+  close(): void;
+}
+
 // ResponseSink is a base class — not declared `abstract` (scriptc doesn't
 // lower abstract methods). Each method has a no-op default; concrete
 // sinks override the ones they need. Same pattern as Ctx/ReqView/App.
@@ -29,6 +38,17 @@ export class ResponseSink {
   bodyBytes(_b: Uint8Array, _ct: string): void {}
   redirect(_url: string, _code: number): void {}
   write(_chunk: string): void {}
+  // Streaming commit seam (@chttp/stream): write status + a flat
+  // [k1, v1, k2, v2, ...] header list and flush headers so subsequent
+  // write() chunks reach the client immediately. On the Node sink this is
+  // res.writeHead + flushHeaders; on the fetch sink it arms ReadableStream
+  // mode (toResponse() then wraps a live stream instead of the chunk
+  // buffer). No-op on the base.
+  writeHead(_status: number, _flatPairs: string[]): void {}
+  // End-of-stream seam for a writeHead()-opened stream. Node ends the
+  // ServerResponse; fetch closes the ReadableStream controller. No-op on
+  // the base — a sink that never armed streaming ignores it.
+  endStream(): void {}
   // Response adoption (0.4.0): a fetch-path handler returned a Response.
   // No-op on the base (and on NodeResponseSink — there is no Web Response
   // to mirror into a ServerResponse); FetchResponseSink overrides it.
@@ -152,6 +172,23 @@ export class NodeResponseSink extends ResponseSink {
     this.res.write(String(chunk));
   }
 
+  writeHead(status: number, flatPairs: string[]): void {
+    const res = this.res;
+    const obj: { [k: string]: string } = {};
+    this._status = Number(status);
+    for (let i = 0; i + 1 < flatPairs.length; i += 2) {
+      const kk = String(flatPairs[i]);
+      obj[kk] = String(flatPairs[i + 1]);
+      this._set[kk.toLowerCase()] = String(flatPairs[i + 1]);
+    }
+    res.writeHead(this._status, obj);
+    res.flushHeaders();
+  }
+
+  endStream(): void {
+    this.res.end();
+  }
+
   isSent(): boolean {
     return this.res.headersSent;
   }
@@ -217,6 +254,14 @@ export class FetchResponseSink extends ResponseSink {
   // we read lowers at 100% static). null until adopt() runs; toResponse()
   // wraps the adopted body stream instead of the chunk buffer when set.
   adopted: ResView | null;
+  // Streaming mode (0.5.0): armed by writeHead() — the response body is a
+  // live ReadableStream. _ctl holds the controller once toResponse() hands
+  // it over (interface view — see StreamCtl above); writes before that
+  // point buffer in chunks and replay at stream start. _endSeen records
+  // an endStream() that arrived before the controller did.
+  _streaming: boolean;
+  _ctl: StreamCtl | null;
+  _endSeen: boolean;
 
   constructor() {
     super();
@@ -228,6 +273,9 @@ export class FetchResponseSink extends ResponseSink {
     this.sent = false;
     this.headersSent = false;
     this.adopted = null;
+    this._streaming = false;
+    this._ctl = null;
+    this._endSeen = false;
   }
 
   setStatus(n: number): void {
@@ -322,7 +370,37 @@ export class FetchResponseSink extends ResponseSink {
   }
 
   write(chunk: string): void {
+    // Streaming arm: once toResponse() has handed the ReadableStream
+    // controller over, chunks enqueue directly instead of buffering —
+    // this is the path @chttp/stream's fetch writers drive.
+    const ctl = this._ctl;
+    if (ctl !== null) {
+      ctl.enqueue(new TextEncoder().encode(String(chunk)));
+      return;
+    }
     this.chunks.push(String(chunk));
+  }
+
+  writeHead(status: number, flatPairs: string[]): void {
+    this.status = Number(status);
+    for (let i = 0; i + 1 < flatPairs.length; i += 2) {
+      this.setHeader(String(flatPairs[i]), String(flatPairs[i + 1]));
+    }
+    // Headers committed + streaming armed: isHeadersSent() must report
+    // true so a later send500 destroys rather than double-writing, and
+    // toResponse() must build the live-stream Response.
+    this.headersSent = true;
+    this.sent = true;
+    this._streaming = true;
+  }
+
+  endStream(): void {
+    this._endSeen = true;
+    this.sent = true;
+    const ctl = this._ctl;
+    if (ctl !== null) {
+      ctl.close();
+    }
   }
 
   // Response adoption (0.4.0): a handler returned a full Response. Its
@@ -392,6 +470,28 @@ export class FetchResponseSink extends ResponseSink {
     for (let i = 0; i + 1 < this.hdrList.length; i += 2) {
       init.headers.push([String(this.hdrList[i]), String(this.hdrList[i + 1])]);
     }
+    const self = this;
+    if (self._streaming) {
+      // Streaming response (opened via writeHead): wrap a live
+      // ReadableStream. Chunks written before toResponse() replay into
+      // the stream at start; chunks written after go straight to the
+      // controller through write(). endStream() may already have run —
+      // close right after the replay then.
+      const rs = new ReadableStream<Uint8Array>({
+        start: function (ctl: ReadableStreamDefaultController<Uint8Array>): void {
+          self._ctl = ctl;
+          const pending = self.chunks;
+          for (let i = 0; i < pending.length; i++) {
+            ctl.enqueue(new TextEncoder().encode(pending[i]));
+          }
+          pending.length = 0;
+          if (self._endSeen) {
+            ctl.close();
+          }
+        },
+      });
+      return new Response(rs, init);
+    }
     const a = this.adopted;
     if (a !== null) {
       const b = a.body;
@@ -400,10 +500,9 @@ export class FetchResponseSink extends ResponseSink {
       }
       return new Response(null, init);
     }
-    // Join captured chunks. A future streaming adapter (follow-up) will
-    // return a ReadableStream Response instead of concatenating here.
-    // Empty joins pass null, not "": the Response constructor stamps its
-    // own content-type on a string body even when init.headers has none.
+    // Join captured chunks. Empty joins pass null, not "": the Response
+    // constructor stamps its own content-type on a string body even when
+    // init.headers has none.
     const body = this.chunks.join("");
     if (body.length > 0) {
       return new Response(body, init);

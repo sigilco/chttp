@@ -62,6 +62,18 @@ app.serve({ port: 3000 });
 `app.serve()`/`app.handler()` call the generated dispatch FIRST on every request; `false` declines to the internal dispatch, which covers non-literal registrations, notFound, and misses.
 Routes registered while the app is running also keep working through the internal path.
 
+## The Web Standards sibling module
+
+Alongside `routes.gen.ts` the plugin always emits `src/.chttp/routes.gen.fetch.ts` satisfying `contracts/route-contract-fetch.md`: `export class CompiledFetchRoutes extends GenFetch` whose `dispatchFetch(method, url, headers, webReq, body, bodyU8, sink)` takes normalized primitives instead of `IncomingMessage`/`ServerResponse`, so `app.fetch` and `app.fetchShim` (the ELF entry, where `new Request` is unconstructable) can run generated dispatch without a synthesized `ServerResponse`.
+
+```ts
+import { CompiledFetchRoutes } from "./.chttp/routes.gen.fetch.ts";
+
+app.withFetchDispatch(new CompiledFetchRoutes(app));
+```
+
+`app.fetch`/`app.fetchShim` try it first per request; `false` declines to the internal dispatch, same as the Node arm. Route checks, precedence, declared-body buffering (`_bufferFetch`), and 405/`Allow` behavior mirror `routes.gen.ts` — stream handlers (`@chttp/stream`) write through `sink.writeHead`/`sink.write`/`sink.endStream` so SSE answers carry a chunked `ReadableStream` body on the Web Standards surface.
+
 ## Declared body buffering
 
 Body buffering is opt-in per the contract's declared-body rule: a handler that reads `c.req.body()` must register with `{ body: true }` or it receives `''`.

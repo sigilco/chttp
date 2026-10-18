@@ -476,3 +476,44 @@ test("onAbort fires exactly once whether registered before or after close", asyn
   fake._onClose(); // second close event must not re-run anything
   assert.deepEqual(runs, ["before", "after"]);
 });
+
+// app.fetch arm: the same streamSSE/streamText handlers must emit chunked
+// ReadableStream bodies (not a buffered single-string body) when the host is
+// Web Standards — contracts/route-contract-fetch.md "streaming" section.
+test("streamSSE on app.fetch emits a chunked ReadableStream", async () => {
+  const app = createRouter();
+  app.get("/e", (c) =>
+    streamSSE(c, (s) => {
+      s.send("one");
+      s.close();
+    }),
+  );
+  const res = await app.fetch(new Request("http://x/e"));
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type"), /^text\/event-stream/);
+  assert.ok(res.body instanceof ReadableStream, "fetch body is a ReadableStream");
+  assert.equal(await res.text(), "data: one\n\n");
+});
+
+test("streamText on app.fetch chunks through the ReadableStream", async () => {
+  const app = createRouter();
+  app.get("/t", (c) =>
+    streamText(c, (s) => {
+      s.writeln("line1");
+      s.write("tail");
+      s.close();
+    }),
+  );
+  const res = await app.fetch(new Request("http://x/t"));
+  assert.equal(res.status, 200);
+  assert.ok(res.body instanceof ReadableStream);
+  const chunks = [];
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  for (;;) {
+    const r = await reader.read();
+    if (r.done) break;
+    chunks.push(dec.decode(r.value));
+  }
+  assert.deepEqual(chunks, ["line1\n", "tail"]);
+});
