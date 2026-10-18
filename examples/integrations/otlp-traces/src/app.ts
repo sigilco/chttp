@@ -18,7 +18,7 @@ export function createApp(exporter: Exporter) {
       name: c.req.method + " " + c.req.path,
       startMs: startMs,
       endMs: Date.now(),
-      httpStatus: c.res === null ? 0 : c.res.statusCode,
+      httpStatus: c.res.statusCode,
     });
   });
 

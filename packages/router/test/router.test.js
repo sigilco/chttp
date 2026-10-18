@@ -729,3 +729,34 @@ test("fetchShim drives the fetch dispatch path with primitives", async () => {
   }
   assert.ok(allow.length > 0);
 });
+
+// c.res view (issue #57): same typed view on the Node surface, backed by
+// NodeResponseSink's tracked status + header table.
+test("c.res view: status reflects a 404 after next() settles (node)", async () => {
+  const app = createRouter();
+  let seen = null;
+  app.use("*", async (c, next) => {
+    await next();
+    seen = c.res.status;
+  });
+  app.get("/ok", (c) => c.text("ok"));
+  const res = call(app, { url: "/missing" });
+  assert.equal(res.statusCode, 404);
+  // The async middleware's post-next() continuation runs on a microtask
+  // after the sync call() returns.
+  await new Promise((r) => setImmediate(r));
+  assert.equal(seen, 404);
+});
+
+test("c.res view: header('content-type') reflects a json() write (node)", async () => {
+  const app = createRouter();
+  let ct = null;
+  app.use("*", async (c, next) => {
+    await next();
+    ct = c.res.header("content-type");
+  });
+  app.get("/json", (c) => c.json({ ok: true }));
+  call(app, { url: "/json" });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(ct, "application/json; charset=utf-8");
+});

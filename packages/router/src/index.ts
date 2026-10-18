@@ -151,11 +151,12 @@ export class ReqViewCore {
   // joined with ", " in copyHeaders).
   _headersDistinct: Record<string, string[]>;
   method: string;
-  // Full request URL (path + query, no host). The Node path stores the
-  // raw `req.url` value; the app.fetch path stores the parsed
-  // path+query from the Web Request. Hono middlewares (logger, etc.)
-  // and Web Standards callers read `c.req.url` to recover the request
-  // line without splitting `path` + `_qs` themselves.
+  // Full request URL. The Node path stores the raw `req.url` value
+  // (path + query, no host — IncomingMessage carries no host). The
+  // app.fetch path stores the Web Request's ABSOLUTE URL, matching
+  // Hono's c.req.url so middlewares that derive the path themselves
+  // (hono/logger's url.slice(indexOf("/", 8))) parse it correctly.
+  // `path`/`_qs` remain the path+query split either way.
   url: string;
   path: string;
   _qs: string;
@@ -216,9 +217,11 @@ export class ReqViewCore {
       // from a Record local in header().
       this._headersDistinct = copyHeadersDistinct(raw.headersDistinct);
       // `url` is the full path+query string the caller saw. On the
-      // Node path it equals `req.url` (path+query, no host); on the
-      // app.fetch path it equals the path+query portion of the Web
-      // Request URL. We accept it as an optional 4th arg so the Node
+      // Node path it equals `req.url` (path+query, no host). On the
+      // app.fetch path the constructor arg is the parsed path+query
+      // used for matching; _dispatchPrim then overwrites `url` with the
+      // Web Request's absolute URL for Hono parity (see the field's
+      // comment). We accept it as an optional 4th arg so the Node
       // dispatch can default to `raw.url` and the fetch path can
       // pass the already-parsed value (avoids a second split).
       this.url = url === undefined ? String(raw.url || path) : String(url);
@@ -480,9 +483,48 @@ export class ReqViewCore {
   }
 }
 
+// CtxResCore is the typed read-back view `c.res` exposes on BOTH surfaces
+// (issue #57): `status`, `header(name)`, and `headers` read through the
+// sink's uniform accessors, so Hono's outbound logger (`c.res.status`
+// after `await next()`) and the compress/etag/prettyJSON middlewares see
+// the same shape under app.handler and app.fetch. Read-only — response
+// writes still go through c.status()/c.header()/the body helpers.
+export class CtxResCore {
+  _sink: ResponseSink;
+
+  constructor(sink: ResponseSink) {
+    this._sink = sink;
+  }
+
+  get status(): number {
+    return this._sink.statusOf();
+  }
+
+  // ServerResponse-shaped alias so Node-shaped callers reading
+  // `c.res.statusCode` keep working on the Node surface.
+  get statusCode(): number {
+    return this._sink.statusOf();
+  }
+
+  header(name: string): string | null {
+    return this._sink.headerOf(String(name));
+  }
+
+  get headers(): { [k: string]: string } {
+    return this._sink.headersMap();
+  }
+
+  // Escape hatch to the underlying ServerResponse on the Node surface
+  // (c.res.end() 304-style paths, res.writeHead); null under app.fetch.
+  nodeRes(): ServerResponse | null {
+    return this._sink.nodeRes();
+  }
+}
+
 export class CtxCore {
   req: ReqViewCore;
   sink: ResponseSink;
+  _resView: CtxResCore;
   _status: number;
   // True once a body-carrying helper (_send/redirect) flushed the response.
   // runOnError reads it: an onError that already answered must not get a
@@ -500,11 +542,12 @@ export class CtxCore {
   // assignment at the constructor branches keeps it typed.
   _nodeRes: ServerResponse | null;
 
-  // Legacy accessor for downstream Node-shaped code (e.g. @chttp/static's
-  // c.res.end() 304 path, @chttp/stream's res.writeHead). null under the
-  // Fetch surface — callers must check.
-  get res(): ServerResponse | null {
-    return this._nodeRes;
+  // Typed response view exposed on both surfaces (issue #57). Replaces
+  // the old `ServerResponse | null` accessor: Node-shaped downstream code
+  // that needs the raw ServerResponse goes through `c.res.nodeRes()` (or
+  // the `c._nodeRes` field, used by @chttp/static and @chttp/stream).
+  get res(): CtxResCore {
+    return this._resView;
   }
 
   constructor(req: ReqViewCore, sink: ResponseSink) {
@@ -520,6 +563,7 @@ export class CtxCore {
     // generated dispatch) without a cast.
     this.sink = sink;
     this._nodeRes = sink.nodeRes();
+    this._resView = new CtxResCore(sink);
     this._status = 200;
     this.sent = false;
     this._vars = "{}";
@@ -626,6 +670,8 @@ export interface ReqView<P extends string = string> extends ReqViewCore {
   rawReq(): IncomingMessage | WebReqView;
 }
 export const ReqView = ReqViewCore;
+export interface CtxRes extends CtxResCore {}
+export const CtxRes = CtxResCore;
 
 // Param names inferred from a path literal: '/user/:id' -> 'id',
 // '/a/:x/b/:y' -> 'x' | 'y', '/w/*' -> '*'. Degrades to `string` when the
@@ -1536,9 +1582,14 @@ export class App {
         return next();
       };
       this._mw.push(wrapped);
+      // Keep the notFound chain in step: use() middleware wraps 404s too
+      // (Hono semantics — hono/logger's outbound line must fire on a miss;
+      // issue #57). Per-route snapshots in _mws are unaffected.
+      this._nfchain = compose(copyMw(this._mw), this._nf);
       return this;
     }
     this._mw.push(pathOrFn);
+    this._nfchain = compose(copyMw(this._mw), this._nf);
     return this;
   }
 
@@ -1826,6 +1877,14 @@ export class App {
     // it (Hono parity). The stream is left untouched here — body reading
     // is declaration-driven below.
     rv._setWeb(webReq);
+    // Hono parity: c.req.url is the ABSOLUTE URL on the fetch surface —
+    // hono/logger derives the path as url.slice(url.indexOf("/", 8)),
+    // which misreads a path-only value ("g" for "/missing"). The Node
+    // surface stays path+query-only because IncomingMessage.url carries
+    // no host (issue #57).
+    if (webReq !== null) {
+      rv.url = String(webReq.url);
+    }
     // Lazy bodies: multipart routes arrive with their bytes already read
     // (app.fetch's arrayBuffer for byte-exact parsing); fetchShim seeds a
     // utf8 string. Everything else defers to the route's bodyFlag: declared

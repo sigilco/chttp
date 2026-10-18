@@ -158,7 +158,6 @@ test("405/404 unchanged: method miss is 405 with Allow, miss is bare Not Found",
   assert.equal(miss404.status, 404);
   assert.equal(await miss404.text(), "Not Found");
 });
-
 test("empty bodies carry no content-type on the fetch surface (Hono parity)", async () => {
   const app = createRouter();
   app.get("/go", (c) => c.redirect("/dest"));
@@ -173,4 +172,37 @@ test("empty bodies carry no content-type on the fetch surface (Hono parity)", as
   const nf = await app.fetch(new Request("http://x/nope"));
   assert.equal(nf.status, 404);
   assert.equal(nf.headers.get("content-type"), "text/plain; charset=UTF-8");
+});
+
+// c.res view (issue #57): the typed response view exposes .status,
+// .header(name), and .headers on the Web Standards surface, reading the
+// FetchResponseSink's captured state — so a middleware that awaits next()
+// sees the final status and headers, same as the Node surface.
+test("c.res view: status reflects a 404 after next() settles", async () => {
+  const app = createRouter();
+  let seen = null;
+  app.use("*", async (c, next) => {
+    await next();
+    seen = c.res.status;
+  });
+  app.get("/ok", (c) => c.text("ok"));
+  const res = await app.fetch(new Request("http://x/missing"));
+  assert.equal(res.status, 404);
+  assert.equal(seen, 404);
+});
+
+test("c.res view: header('content-type') reflects a json() write", async () => {
+  const app = createRouter();
+  let ct = null;
+  let all = null;
+  app.use("*", async (c, next) => {
+    await next();
+    ct = c.res.header("content-type");
+    all = c.res.headers;
+  });
+  app.get("/json", (c) => c.json({ ok: true }));
+  const res = await app.fetch(new Request("http://x/json"));
+  assert.equal(res.status, 200);
+  assert.equal(ct, "application/json; charset=utf-8");
+  assert.equal(all["content-type"], "application/json; charset=utf-8");
 });

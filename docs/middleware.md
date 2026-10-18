@@ -41,7 +41,10 @@ function preflight(c: Ctx): void {
     .header("access-control-allow-methods", "GET,POST,PUT,DELETE,OPTIONS")
     .header("access-control-allow-headers", "content-type,authorization")
     .header("access-control-max-age", "86400");
-  c.res.end();
+  const rs = c.res.nodeRes(); // raw ServerResponse (Node surface only)
+  if (rs !== null) {
+    rs.end();
+  }
   c.sent = true; // tells dispatch this middleware answered
 }
 
@@ -74,13 +77,19 @@ app.get("/users", (c: Ctx) => {
   const inm: string | null = c.req.header("if-none-match");
   if (inm !== null && inm === etag) {
     c.status(304);
-    c.res.end();
+    const rs = c.res.nodeRes(); // raw ServerResponse (Node surface only)
+    if (rs !== null) {
+      rs.end();
+    }
     c.sent = true;
     return;
   }
   c.header("etag", etag);
-  c.res.setHeader("content-type", "application/json; charset=utf-8");
-  c.res.end(body);
+  const rs = c.res.nodeRes();
+  if (rs !== null) {
+    rs.setHeader("content-type", "application/json; charset=utf-8");
+    rs.end(body);
+  }
   c.sent = true;
 });
 ```
@@ -160,7 +169,7 @@ Fixed windows burst at the seam (up to 2×LIMIT across a boundary). Sliding wind
 
 Do not hand-roll a static handler: reading files as utf8 corrupts binaries, and the traversal, caching and `index.html` details are easy to get wrong. Use [`@chttp/static`](static.md), which serves bytes through `c.bytes()`, handles ETag/304, HEAD, precompressed siblings and an opt-in SPA fallback, and compiles into the ELF.
 
-If you do need a hand-rolled variant (single small asset set, no package), know the traversal pitfall before you start: `c.req.param("*")` is the *decoded* path tail, so `%2e%2e` arrives as `..` before your code sees it, so guard on the decoded value, reject any tail containing `..` or a leading `/`, and write the response manually with `c.res.setHeader` + `c.res.end()`, because `c.text()` forces its own `content-type`.
+If you do need a hand-rolled variant (single small asset set, no package), know the traversal pitfall before you start: `c.req.param("*")` is the *decoded* path tail, so `%2e%2e` arrives as `..` before your code sees it, so guard on the decoded value, reject any tail containing `..` or a leading `/`, and write the response manually through `c.res.nodeRes()` (the raw `ServerResponse`, null on the `app.fetch` surface) with `rs.setHeader` + `rs.end()`, because `c.text()` forces its own `content-type`.
 
 ### Timing header
 

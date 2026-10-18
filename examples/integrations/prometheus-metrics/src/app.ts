@@ -11,7 +11,7 @@ export function createApp(record: Record) {
   app.use(async (c: Ctx, next) => {
     const t0 = Date.now();
     await next();
-    record(c.req.method, c.res === null ? 0 : c.res.statusCode, (Date.now() - t0) / 1000);
+    record(c.req.method, c.res.statusCode, (Date.now() - t0) / 1000);
   });
 
   app.get("/", (c) => c.json({ ok: true }));

@@ -32,18 +32,9 @@ function captureStdout(): { read: () => string; restore: () => void } {
   };
 }
 
-// Known limitation: hono/logger reads `c.res.status` after `await next()`
-// to compose the outbound log line. chttp's `c.res` returns the
-// underlying ServerResponse (Node path) or null (fetch path); neither
-// exposes a `.status` property — ServerResponse uses `.statusCode`, and
-// the fetch path has no response object. hono/logger therefore throws
-// on the outbound line, and only the inbound line (<-- ...) ever
-// prints. This is tracked in TODO #__ (file follow-up after this PR):
-// either surface a Response-shaped `c.res` on the fetch path that
-// scriptc can lower, or report the type issue to scriptc if Hono's
-// typing is actually correct. The test below asserts only the inbound
-// line; flipping the outbound assertion back on is the close-out for
-// that follow-up.
+// `c.res` is the typed response view added for Hono compat (issue #57):
+// `.status` reads through the sink on both surfaces, so hono/logger's
+// outbound `-->` line prints the real status code after `await next()`.
 
 test("hono/logger prints the inbound <-- line on a 200 response", async () => {
   const app = createApp();
@@ -55,14 +46,14 @@ test("hono/logger prints the inbound <-- line on a 200 response", async () => {
   } finally {
     cap.restore();
   }
-  const out = cap.read();
+  const out = cap.read().replace(/\x1b\[\d+m/g, "");
   // The inbound line proves c.req.url is populated and that
   // app.use('*', mw) is honored by chttp's middleware chain. Both
   // landed in this PR.
   assert.match(out, /<-- GET \//, "expected inbound log line, got: " + out);
 });
 
-test.skip("hono/logger outbound --> line (blocked on c.res.status on fetch path)", async () => {
+test("hono/logger outbound --> line (c.res.status on fetch path)", async () => {
   const app = createApp();
   const cap = captureStdout();
   try {
@@ -73,10 +64,10 @@ test.skip("hono/logger outbound --> line (blocked on c.res.status on fetch path)
     cap.restore();
   }
   const out = cap.read();
-  assert.match(out, /--> GET \/\s*200\b/, "expected outbound log line with 200, got: " + out);
+  assert.match(out.replace(/\x1b\[\d+m/g, ""), /--> GET \/\s*200\b/, "expected outbound log line with 200, got: " + out);
 });
 
-test.skip("hono/logger outbound --> line for 404 (blocked on c.res.status on fetch path)", async () => {
+test("hono/logger outbound --> line for 404 (c.res.status on fetch path)", async () => {
   const app = createApp();
   const cap = captureStdout();
   try {
@@ -87,5 +78,5 @@ test.skip("hono/logger outbound --> line for 404 (blocked on c.res.status on fet
     cap.restore();
   }
   const out = cap.read();
-  assert.match(out, /--> GET \/missing\s*404\b/, "expected 404 in outbound log, got: " + out);
+  assert.match(out.replace(/\x1b\[\d+m/g, ""), /--> GET \/missing\s*404\b/, "expected 404 in outbound log, got: " + out);
 });
