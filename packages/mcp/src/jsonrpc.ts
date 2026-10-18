@@ -57,8 +57,14 @@ export function requestId(req: JsonRpcRequest): RequestId | null {
 }
 
 export function resultResponse(id: RequestId, result: unknown): JsonRpcResponse {
-  const r: JsonRpcResponse = { jsonrpc: "2.0", id: id };
-  r.result = result === undefined ? null : result;
+  // Single literal: expanding writes on a non-empty literal (`r.result =`)
+  // are dropped when scriptc lowers the packed dist JS — records built by a
+  // published package must carry every key in the literal or start from {}.
+  const r: JsonRpcResponse = {
+    jsonrpc: "2.0",
+    id: id,
+    result: result === undefined ? null : result,
+  };
   return r;
 }
 
@@ -68,10 +74,11 @@ export function errorResponse(
   message: string,
   data?: unknown,
 ): JsonRpcResponse {
-  const e: JsonRpcErrorObject = { code: code, message: message };
-  if (data !== undefined) {
-    e.data = data;
-  }
+  // Two full literals for the optional `data` — same dropped-write rule.
+  const e: JsonRpcErrorObject =
+    data === undefined
+      ? { code: code, message: message }
+      : { code: code, message: message, data: data };
   // JSON-RPC answers parse/shape failures on `"id": null`; the cast keeps the
   // public id type at RequestId while emitting spec-correct null on the wire.
   const r = { jsonrpc: "2.0" as const, id: id, error: e } as JsonRpcResponse;

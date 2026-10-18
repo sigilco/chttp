@@ -44,8 +44,21 @@ export class VFail {
 }
 export const FAIL: VFail = new VFail();
 
+// Phantom Standard Schema `types` slot carried by concrete schemas: each
+// schema class merges a same-named interface that narrows `"~standard"` to
+// `StdTyped<I, O>`, so a consumer's `InferInput`/`InferOutput` resolves real
+// types (e.g. the @chttp/mcp tool() handler input). Type-level only — the
+// class field stays `StdProps`, so nothing changes at runtime or for
+// scriptc lowering (cutils#27).
+export interface StdTyped<I, O> extends StdProps {
+  types: { input: I; output: O };
+}
+
 export class StdProps {
-  version: number;
+  // Literal `1`, not `number`: Standard Schema v1 requires the literal, and
+  // a `number` field makes every val schema refuse StandardSchemaV1
+  // assignment (TS2345/TS2739 in consumers — cutils#27).
+  version: 1;
   vendor: string;
   schema: VSchema;
   constructor(schema: VSchema) {

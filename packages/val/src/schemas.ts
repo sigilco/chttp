@@ -2,6 +2,7 @@
 // the FAIL sentinel from types.ts.
 
 import { FAIL, VFail, VIssue, VSchema, pushIssue, receivedOf } from "./types.ts";
+import type { StdTyped } from "./types.ts";
 
 // Best-effort output typing without generics (generic phantom fields cannot
 // compile): resolves the concrete schema classes; VObject/VRecord resolve to
@@ -21,6 +22,10 @@ export type InferOutput<S> = S extends VStr
 
 // ---------------------------------------------------------------- schemas
 
+export interface VStr {
+  "~standard": StdTyped<string, string>;
+}
+
 export class VStr extends VSchema {
   constructor() {
     super("string");
@@ -34,6 +39,10 @@ export class VStr extends VSchema {
   }
 }
 
+export interface VNum {
+  "~standard": StdTyped<number, number>;
+}
+
 export class VNum extends VSchema {
   constructor() {
     super("number");
@@ -45,6 +54,10 @@ export class VNum extends VSchema {
     pushIssue(issues, "number", input, "number", null, path);
     return FAIL;
   }
+}
+
+export interface VBool {
+  "~standard": StdTyped<boolean, boolean>;
 }
 
 export class VBool extends VSchema {
@@ -225,6 +238,10 @@ export class VNullish extends VSchema {
   }
 }
 
+export interface VArray {
+  "~standard": StdTyped<unknown[], unknown[]>;
+}
+
 export class VArray extends VSchema {
   item: VSchema;
   constructor(item: VSchema) {
@@ -248,6 +265,10 @@ export class VArray extends VSchema {
     }
     return out;
   }
+}
+
+export interface VTuple {
+  "~standard": StdTyped<unknown[], unknown[]>;
 }
 
 export class VTuple extends VSchema {
@@ -278,6 +299,10 @@ export class VTuple extends VSchema {
 // Object modes: 0 = strip unknown keys (valibot `object`), 1 = loose (keep),
 // 2 = strict (unknown keys are issues). Entries are parallel arrays plus a
 // presence map — records cannot hold function/class-varying values.
+export interface VObject {
+  "~standard": StdTyped<{ [k: string]: unknown }, { [k: string]: unknown }>;
+}
+
 export class VObject extends VSchema {
   keys: string[];
   schemas: VSchema[];
@@ -358,6 +383,10 @@ export class VObject extends VSchema {
     }
     return out;
   }
+}
+
+export interface VRecord {
+  "~standard": StdTyped<{ [k: string]: unknown }, { [k: string]: unknown }>;
 }
 
 export class VRecord extends VSchema {

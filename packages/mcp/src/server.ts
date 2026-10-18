@@ -396,11 +396,12 @@ export class Server {
     if (opt["logging"] !== undefined) {
       caps["logging"] = opt["logging"];
     }
-    const r: { [k: string]: unknown } = {
-      protocolVersion: PROTOCOL_VERSION,
-      capabilities: caps,
-      serverInfo: { name: this._name, version: this._version },
-    };
+    // Open record: expanding writes on a non-empty literal are dropped when
+    // scriptc lowers the packed dist JS (see jsonrpc.ts resultResponse).
+    const r: { [k: string]: unknown } = {};
+    r["protocolVersion"] = PROTOCOL_VERSION;
+    r["capabilities"] = caps;
+    r["serverInfo"] = { name: this._name, version: this._version };
     if (this._instructions !== null) {
       r["instructions"] = this._instructions;
     }
@@ -410,10 +411,9 @@ export class Server {
   _toolsList(): { [k: string]: unknown } {
     const tools: { [k: string]: unknown }[] = [];
     for (let i = 0; i < this._toolNames.length; i++) {
-      const t: { [k: string]: unknown } = {
-        name: this._toolNames[i],
-        inputSchema: JSON.parse(this._toolInputJson[i]),
-      };
+      const t: { [k: string]: unknown } = {};
+      t["name"] = this._toolNames[i];
+      t["inputSchema"] = JSON.parse(this._toolInputJson[i]);
       const d = this._toolDescs[i];
       if (d !== null) {
         t["description"] = d;
@@ -481,7 +481,8 @@ export class Server {
   _resourcesList(): { [k: string]: unknown } {
     const resources: { [k: string]: unknown }[] = [];
     for (let i = 0; i < this._resUris.length; i++) {
-      const r: { [k: string]: unknown } = { uri: this._resUris[i] };
+      const r: { [k: string]: unknown } = {};
+      r["uri"] = this._resUris[i];
       const n = this._resNames[i];
       r["name"] = n === null ? this._resUris[i] : n;
       const d = this._resDescs[i];
@@ -521,7 +522,8 @@ export class Server {
   _promptsList(): { [k: string]: unknown } {
     const prompts: { [k: string]: unknown }[] = [];
     for (let i = 0; i < this._prNames.length; i++) {
-      const p: { [k: string]: unknown } = { name: this._prNames[i] };
+      const p: { [k: string]: unknown } = {};
+      p["name"] = this._prNames[i];
       const d = this._prDescs[i];
       if (d !== null) {
         p["description"] = d;
@@ -564,7 +566,8 @@ export class Server {
     const ctx = new PromptCtx(this);
     const raw = this._prHandlers[idx](args, ctx);
     const out = (await (raw as Promise<unknown>)) as { messages: PromptMessage[] };
-    const result: { [k: string]: unknown } = { messages: out.messages };
+    const result: { [k: string]: unknown } = {};
+    result["messages"] = out.messages;
     const d = this._prDescs[idx];
     if (d !== null) {
       result["description"] = d;
