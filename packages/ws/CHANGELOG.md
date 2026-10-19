@@ -1,5 +1,16 @@
 # @chttp/ws
 
+## 0.4.0
+
+### Minor Changes
+
+- feat(ws): post-merge audit hardening for issue #13 — `allowOrigin` exact-match allowlist (403), `Sec-WebSocket-Key` base64/16-byte format check, peer close-reason UTF-8 validation (1007); `upgradeHandler()` catches a throwing dispatch and destroys the socket; `UpgradeFn` re-exported
+
+### Patch Changes
+
+- Updated dependencies:
+  - @chttp/router@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@chttp/mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Model Context Protocol server (JSON-RPC 2.0) mounted as a chttp route, authored inside the scriptc compilable subset",
   "license": "Apache-2.0",
   "repository": {
@@ -41,7 +41,7 @@
     "valibot": "^1.5.0"
   },
   "peerDependencies": {
-    "@chttp/router": ">=0.1.0"
+    "@chttp/router": "workspace:^"
   },
   "engines": {
     "node": ">=22"

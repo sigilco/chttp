@@ -1,6 +1,6 @@
 {
   "name": "@chttp/static",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Static asset serving for chttp, authored inside the scriptc compilable subset",
   "license": "Apache-2.0",
   "repository": {

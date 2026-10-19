@@ -1,5 +1,14 @@
 # @chttp/static
 
+## 0.4.0
+
+### Patch Changes
+
+- Add an end-to-end ELF smoke (serve + SPA + embedded) so runtime-only fences on older scriptc versions can't slip through
+
+- Updated dependencies:
+  - @chttp/router@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes

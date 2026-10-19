@@ -1,6 +1,6 @@
 {
   "name": "@chttp/html",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Minimal HTML string rendering (escape, h, html tag) authored inside the scriptc compilable subset",
   "license": "Apache-2.0",
   "repository": {

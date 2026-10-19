@@ -1,5 +1,19 @@
 # @chttp/unplugin
 
+## 0.4.0
+
+### Minor Changes
+
+- feat(router): Web Standards generated-dispatch arm (GenFetch/withFetchDispatch, contract v4) + fetch emitter in unplugin; @chttp/stream streams through FetchResponseSink as a real ReadableStream
+
+### Patch Changes
+
+- empty-body responses send no content-type (Hono parity); default text/plain charset is UTF-8
+
+- Updated dependencies:
+  - @chttp/router@0.4.0
+  - @chttp/val@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
