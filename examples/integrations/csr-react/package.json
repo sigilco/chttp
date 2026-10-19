@@ -1,0 +1,26 @@
+{
+  "name": "chttp-example-csr-react",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build:web": "vite build",
+    "bake": "node scripts/bake.mjs",
+    "vendor": "node scripts/vendor.mjs",
+    "build": "node scripts/bake.mjs && node scripts/vendor.mjs && scriptc build src/main.baked.ts -o app",
+    "start": "node --experimental-strip-types src/main.ts",
+    "start:elf": "./app",
+    "test": "node --experimental-strip-types --test test/csr.test.ts"
+  },
+  "dependencies": {
+    "@chttp/router": "workspace:*",
+    "@chttp/static": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "scriptc": ">=0.3.2",
+    "vite": "^7.0.0"
+  }
+}

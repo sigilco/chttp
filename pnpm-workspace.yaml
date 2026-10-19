@@ -23,6 +23,7 @@ versioning:
     - chttp-example-backpressure
     - chttp-example-aws-lambda
     - chttp-example-cloudflare-workers
+    - chttp-example-csr-react
     - chttp-example-hono-middleware
     - chttp-example-mcp-stdio
     - chttp-example-logging-file-audit
