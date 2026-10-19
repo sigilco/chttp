@@ -73,7 +73,7 @@ The socket parameter is annotated `Socket` from `node:net`, with named imports. 
 1. `head` is the first bytes already read after the HTTP headers. Implementations must treat it as the start of the post-upgrade stream.
 1. `upgradeHandler()` with nothing registered destroys every socket it receives.
 1. `serve()` registers no `"upgrade"` listener. An app that registered a dispatch but never wires the listener gets node's default: the connection is destroyed.
-1. Thrown errors are not caught by the runtime. Implementations should answer protocol errors themselves and return `true`.
+1. A dispatch that throws is treated as unhandled: `upgradeHandler()` catches it and destroys the socket. Implementations should still answer protocol errors themselves and return `true`.
 
 ## Surface exported for protocol packages
 

@@ -164,6 +164,71 @@ test("handshake: unknown path is 404, wrong version/upgrade is 426, no key is 40
   server.close();
 });
 
+test("handshake: Sec-WebSocket-Key format is checked; odd valid headers pass", async () => {
+  const { server, port } = await start(new Rec());
+  const base = {
+    Host: "x",
+    Upgrade: "websocket",
+    Connection: "Upgrade",
+    "Sec-WebSocket-Key": KEY,
+    "Sec-WebSocket-Version": "13",
+  };
+  const cases = [
+    // Keys that are not a base64-encoded 16 byte nonce.
+    ["/echo", { ...base, "Sec-WebSocket-Key": "not base64 !!!" }, "400"],
+    ["/echo", { ...base, "Sec-WebSocket-Key": Buffer.from("short").toString("base64") }, "400"],
+    // A Connection token list still carries "upgrade"; header values are
+    // case-insensitive. (A request without an upgrade token never reaches
+    // the dispatch: node:http does not emit "upgrade" for it.)
+    ["/echo", { ...base, Connection: "keep-alive, Upgrade" }, "101"],
+    ["/echo", { ...base, Upgrade: "WebSocket" }, "101"],
+  ];
+  for (const [path, h, code] of cases) {
+    const c = await rawConnect(port, path, h);
+    await until(c, (b) => headEnd(b) > 0);
+    assert.ok(
+      c.buf.toString().startsWith("HTTP/1.1 " + code),
+      JSON.stringify(h) + " -> " + c.buf.toString().split("\r\n")[0],
+    );
+    c.s.destroy();
+  }
+  server.close();
+});
+
+test("handshake: allowOrigin enforces an exact-match allowlist with 403", async () => {
+  const h = new Rec();
+  const ws = new WsRouter().ws("/echo", h).allowOrigin("https://ok.example");
+  const app = createRouter();
+  app.withUpgrade(ws);
+  const server = app.serve({ port: 0, host: "127.0.0.1" });
+  server.on("upgrade", app.upgradeHandler());
+  await new Promise((r) => server.once("listening", r));
+  const port2 = server.address().port;
+  const base = {
+    Host: "x",
+    Upgrade: "websocket",
+    Connection: "Upgrade",
+    "Sec-WebSocket-Key": KEY,
+    "Sec-WebSocket-Version": "13",
+  };
+  const cases = [
+    [{ ...base, Origin: "https://ok.example" }, "101"],
+    [{ ...base, Origin: "https://evil.example" }, "403"],
+    // Once an allowlist exists, a missing Origin is rejected too.
+    [base, "403"],
+  ];
+  for (const [hdrs, code] of cases) {
+    const c = await rawConnect(port2, "/echo", hdrs);
+    await until(c, (b) => headEnd(b) > 0);
+    assert.ok(
+      c.buf.toString().startsWith("HTTP/1.1 " + code),
+      JSON.stringify(hdrs) + " -> " + c.buf.toString().split("\r\n")[0],
+    );
+    c.s.destroy();
+  }
+  server.close();
+});
+
 test("text echo, :param, binary echo, ping/pong, clean close", async () => {
   const h = new Rec();
   const { server, port } = await start(h);
@@ -266,6 +331,17 @@ test("protocol violations close with the right code", async () => {
   await expectClose(port, (s) => s.write(clientFrame(8, Buffer.from([0x03]))), 1002);
   await expectClose(port, (s) => s.write(clientFrame(8, Buffer.from([0x03, 0xed]))), 1002);
   await expectClose(port, (s) => s.write(clientFrame(1, Buffer.from([0xff, 0xfe]))), 1007);
+  // Invalid UTF-8 spread across a fragmented message is caught at assembly.
+  await expectClose(
+    port,
+    (s) => {
+      s.write(clientFrame(1, Buffer.from("ok"), { fin: false }));
+      s.write(clientFrame(0, Buffer.from([0xff, 0xfe]), { fin: true }));
+    },
+    1007,
+  );
+  // A peer close reason must be valid UTF-8 too (1000, then 0xff).
+  await expectClose(port, (s) => s.write(clientFrame(8, Buffer.from([0x03, 0xe8, 0xff]))), 1007);
   await expectClose(port, (s) => s.write(clientFrame(2, Buffer.alloc(1001))), 1009);
   await expectClose(
     port,
@@ -275,6 +351,41 @@ test("protocol violations close with the right code", async () => {
     },
     1009,
   );
+  server.close();
+});
+
+test("a single socket write above maxPending is refused with 1009", async () => {
+  // Frame payloads (800 each) fit maxPayload, but the one-shot socket write
+  // puts 1600+ buffered bytes over the 1050 maxPending cap at feed() time.
+  const { server, port } = await start(new Rec(), [2000, 1050]);
+  await expectClose(
+    port,
+    (s) =>
+      s.write(
+        Buffer.concat([clientFrame(1, Buffer.alloc(800)), clientFrame(1, Buffer.alloc(800))]),
+      ),
+    1009,
+  );
+  server.close();
+});
+
+test("a zero-length message round-trips", async () => {
+  const h = new Rec();
+  const { server, port } = await start(h);
+  const c = await handshake(port, "/echo");
+  c.s.write(clientFrame(1, Buffer.alloc(0)));
+  c.s.write(clientFrame(2, Buffer.alloc(0)));
+  await c.waitFrames(2);
+  const f = c.frames();
+  assert.equal(f[0].op, 1);
+  assert.equal(f[0].payload.toString(), "echo:");
+  assert.equal(f[1].op, 2);
+  assert.equal(f[1].payload.length, 0);
+  assert.deepEqual(
+    h.events.filter((e) => e[0] === "message"),
+    [["message", ""]],
+  );
+  c.s.destroy();
   server.close();
 });
 

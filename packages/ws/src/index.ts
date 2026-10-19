@@ -460,7 +460,12 @@ export class WsConn {
         this._fail(1002);
         return;
       }
-      reason = Buffer.from(payload.subarray(2)).toString("utf8");
+      const rb = payload.subarray(2);
+      reason = Buffer.from(rb).toString("utf8");
+      if (!Buffer.from(reason, "utf8").equals(rb)) {
+        this._fail(1007);
+        return;
+      }
     }
     // Echo the code (1000 when the peer sent none) and finish.
     let echo = code;
@@ -512,6 +517,10 @@ export class WsRouter extends UpgradeDispatch {
   maxBacklog: number = 4194304;
   _pats: string[] = [];
   _hs: WsHandler[] = [];
+  // Exact-match Origin allowlist. Empty accepts every origin: the default
+  // stays open (matching the ws library) and cookie-authenticated apps
+  // must opt in — see docs/websocket.md on CSWSH.
+  _origins: string[] = [];
 
   ws(path: string, h: WsHandler): WsRouter {
     this._pats.push(path);
@@ -527,6 +536,13 @@ export class WsRouter extends UpgradeDispatch {
 
   withMaxBacklog(maxBacklog: number): WsRouter {
     this.maxBacklog = maxBacklog;
+    return this;
+  }
+
+  // Adds an exact-match allowed Origin. Once at least one is registered,
+  // handshakes without a matching Origin header are rejected with 403.
+  allowOrigin(origin: string): WsRouter {
+    this._origins.push(origin);
     return this;
   }
 
@@ -561,13 +577,32 @@ export class WsRouter extends UpgradeDispatch {
       reject(socket, "426 Upgrade Required", "Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\n");
       return true;
     }
+    // The Connection header needs no check here: node:http only emits
+    // "upgrade" when it already carries an upgrade token, so a request
+    // reaching this dispatch is guaranteed to have one.
+    if (this._origins.length > 0) {
+      const o = req.headers["origin"];
+      let ok = false;
+      if (o !== undefined) {
+        for (let i = 0; i < this._origins.length; i++) {
+          if (this._origins[i] === o) {
+            ok = true;
+          }
+        }
+      }
+      if (!ok) {
+        reject(socket, "403 Forbidden", "");
+        return true;
+      }
+    }
     const ver = req.headers["sec-websocket-version"];
     if (ver === undefined || ver !== "13") {
       reject(socket, "426 Upgrade Required", "Sec-WebSocket-Version: 13\r\n");
       return true;
     }
     const key = req.headers["sec-websocket-key"];
-    if (req.method !== "GET" || key === undefined || key.length === 0) {
+    // RFC 6455 4.2.1: the key is a base64 value carrying a 16 byte nonce.
+    if (req.method !== "GET" || key === undefined || Buffer.from(key, "base64").length !== 16) {
       reject(socket, "400 Bad Request", "");
       return true;
     }

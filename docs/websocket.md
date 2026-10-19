@@ -51,10 +51,21 @@ The path is matched first, then the upgrade headers:
 | --- | --- |
 | no route matches the path | 404 |
 | `Upgrade` is not `websocket`, or `Sec-WebSocket-Version` is not `13` | 426 with `Sec-WebSocket-Version: 13` |
-| method is not GET, or `Sec-WebSocket-Key` is missing | 400 |
+| method is not GET, or `Sec-WebSocket-Key` is missing or is not a base64-encoded 16 byte nonce | 400 |
+| an origin allowlist is set and `Origin` does not match exactly | 403 |
 | otherwise | 101 with `Sec-WebSocket-Accept` (sha1 of key plus the RFC GUID, base64) |
 
-Error responses are written by the router and the socket is ended. No subprotocol or origin negotiation happens; check `req` yourself in a custom `UpgradeDispatch` if you need it.
+Error responses are written by the router and the socket is ended. `Connection` is not in the table because `node:http` only emits `"upgrade"` when the header already carries an `upgrade` token — a request reaching the dispatch is guaranteed to have one.
+
+## Origin allowlist
+
+By default every origin is accepted, matching the `ws` library. Apps that authenticate with cookies are exposed to cross-site WebSocket hijacking (CSWSH) under that default; register an exact-match allowlist and handshakes whose `Origin` header is missing or unlisted are rejected with 403:
+
+```ts
+new WsRouter().allowOrigin("https://app.example").ws("/echo", new Echo());
+```
+
+No subprotocol negotiation happens; check `req` yourself in a custom `UpgradeDispatch` if you need it.
 
 ## Framing and limits
 
@@ -63,10 +74,10 @@ The parser is incremental and non-recursive over `Buffer.concat`. It handles 7, 
 | Code | Cause |
 | --- | --- |
 | 1002 | reserved bits, unknown opcode, unmasked client frame, bad control frame, bad continuation order, bad close payload or code |
-| 1007 | text message that is not valid UTF-8 |
+| 1007 | text message or peer close reason that is not valid UTF-8 |
 | 1009 | frame or assembled message above `maxPayload`, or buffered input above `maxPending` |
 
-Limits default to a 1 MiB `maxPayload` and `maxPayload + 128 KiB` for `maxPending` (unparsed bytes held per connection). Change them with `new WsRouter().withLimits(maxPayload, maxPending)`. Frames are rejected from the header alone, before the payload is buffered. There is no permessage-deflate.
+Limits default to a 1 MiB `maxPayload` and `maxPayload + 128 KiB` for `maxPending` (unparsed bytes held per connection). Change them with `new WsRouter().withLimits(maxPayload, maxPending)`. A single frame is rejected from its header alone, before the payload is buffered. A fragmented message is different: each fragment is buffered as it arrives and the running total is checked, so a connection can hold up to roughly `maxPayload` assembled bytes before the 1009 fires. There is no permessage-deflate.
 
 ## Compiling to a native binary
 
@@ -89,4 +100,4 @@ server.on("upgrade", function (req: IncomingMessage, socket: Socket, head: Buffe
 
 - TODO: Autobahn testsuite (fuzzingclient, Docker) against the node and native builds. Sections 1 to 7 are the target; permessage-deflate sections (12, 13) are out of scope. Results will go in `bench/RESULTS-ws.md`.
 - TODO: throughput cell against `ws` on node.
-- Not implemented: subprotocol and origin helpers, idle timeouts.
+- Not implemented: subprotocol negotiation, idle and close-handshake timeouts (a peer that never answers a close frame leaves the socket half-open until TCP teardown).
