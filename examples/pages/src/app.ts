@@ -1,7 +1,7 @@
 // pages: server-side component rendering on chttp — SSG + ISR slice.
 // Components are plain (props) => string functions returning markup from
 // @chttp/html; the same source compiles to a native ELF via `pnpm build`.
-import { IsrPage, escapeHtml, h, html, page } from "@chttp/html";
+import { IsrPage, escapeHtml, h, page } from "@chttp/html";
 import { createRouter } from "@chttp/router";
 
 interface Post {
@@ -27,7 +27,7 @@ function PostCard(post: Post): string {
   return h(
     "article",
     ["class", "post"],
-    [h("h1", [], [escapeHtml(post.title)]), html`<p>${post.body}</p>`],
+    [h("h1", [], [escapeHtml(post.title)]), h("p", [], [escapeHtml(post.body)])],
   );
 }
 
@@ -50,7 +50,7 @@ export function buildApp(revalidateSeconds: number) {
       slug: post.slug,
       view: new IsrPage(() => {
         renders++;
-        return Layout(post.title, PostCard(post) + html`<p>render ${renders}</p>`);
+        return Layout(post.title, PostCard(post) + h("p", [], [escapeHtml("render " + renders)]));
       }, revalidateSeconds),
     });
   }
