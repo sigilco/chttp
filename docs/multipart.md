@@ -3,13 +3,13 @@
 `multipart/form-data` uploads are opt-in per route — the same seam as `{ body: true }`. Declare `multipart` in the route options and dispatch parses the stream before the handler chain runs, so `c.req` stays synchronous.
 
 ```ts
-import { createRouter, diskStorage, memoryStorage } from "@chttp/router";
+import { CtxCore, createRouter, diskStorage, memoryStorage } from "@chttp/router";
 
 const app = createRouter();
 
 app.post(
   "/api/entries/:entryId/media",
-  (c) => {
+  (c: CtxCore) => {
     const file = c.req.file("file"); // UploadedFile | null
     const title = c.req.field("title"); // string | null
     db.run([file!.path, file!.mimeType, file!.size, title]);

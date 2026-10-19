@@ -3,12 +3,12 @@
 `@chttp/stream` adds Server-Sent Events and chunked text responses to `@chttp/router`. It is authored in the scriptc subset, so it compiles into the same native binary as your app.
 
 ```ts
-import { createRouter } from "@chttp/router";
+import { CtxCore, createRouter } from "@chttp/router";
 import { streamSSE } from "@chttp/stream";
 
 const app = createRouter();
 
-app.get("/clock", (c) =>
+app.get("/clock", (c: CtxCore) =>
   streamSSE(c, (s) => {
     const t = setInterval(() => s.send(new Date().toISOString(), "tick"), 1000);
     s.onAbort(() => clearInterval(t));
@@ -43,7 +43,7 @@ Multi-line data is split on LF, CRLF or CR into one `data:` line each, as the SS
 `streamText(c, fn)` is the same shape for `text/plain` chunked output. The stream has `write(s)`, `writeln(s)`, `close()` and `onAbort(fn)`.
 
 ```ts
-app.get("/log", (c) =>
+app.get("/log", (c: CtxCore) =>
   streamText(c, (s) => {
     s.writeln("starting");
     s.writeln("done");

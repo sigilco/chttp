@@ -3,20 +3,20 @@
 Minimal async-first HTTP router for `node:http`, zero dependencies, authored inside the [scriptc](https://github.com/vercel-labs/scriptc) compilable subset. The same source lowers to a native ELF directly, no plugin required.
 
 ```ts
-import { createRouter } from "@chttp/router";
+import { CtxCore, createRouter } from "@chttp/router";
 
 const app = createRouter();
 
-app.get("/", (c) => c.text("hi"));
-app.get("/user/:id", (c) => c.json({ id: c.req.param("id") }));
-app.post("/echo", (c) => c.text(c.req.body()));
+app.get("/", (c: CtxCore) => c.text("hi"));
+app.get("/user/:id", (c: CtxCore) => c.json({ id: c.req.param("id") }));
+app.post("/echo", (c: CtxCore) => c.text(c.req.body()));
 
-app.get("/slow", async (c) => {
+app.get("/slow", async (c: CtxCore) => {
   const user = await fetchUser(c.req.param("id"));
   return c.json(user);
 });
 
-app.notFound((c) => c.status(404).text("not found"));
+app.notFound((c: CtxCore) => c.status(404).text("not found"));
 
 app.serve({ port: 3000 });
 ```

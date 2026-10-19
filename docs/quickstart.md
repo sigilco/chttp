@@ -5,7 +5,7 @@ pnpm add @chttp/router
 ```
 
 ```ts
-import { createRouter } from "@chttp/router";
+import { CtxCore, createRouter } from "@chttp/router";
 
 const app = createRouter();
 
@@ -16,18 +16,18 @@ function sleep(ms: number): Promise<void> {
 }
 
 // Sync handler: returns immediately, no microtask cost.
-app.get("/", (c) => c.text("hi"));
-app.get("/user/:id", (c) => c.json({ id: c.req.param("id") }));
+app.get("/", (c: CtxCore) => c.text("hi"));
+app.get("/user/:id", (c: CtxCore) => c.json({ id: c.req.param("id") }));
 
 // Async handler: await anything, the router waits for it to settle.
-app.get("/slow", async (c) => {
+app.get("/slow", async (c: CtxCore) => {
   await sleep(100);
   c.text("done");
 });
 
 // Declare { body: true } or c.req.body() returns "".
-app.post("/echo", (c) => c.text(c.req.body()), { body: true });
-app.notFound((c) => c.status(404).text("not found"));
+app.post("/echo", (c: CtxCore) => c.text(c.req.body()), { body: true });
+app.notFound((c: CtxCore) => c.status(404).text("not found"));
 
 app.serve({ port: 3000 });
 ```
