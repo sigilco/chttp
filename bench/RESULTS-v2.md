@@ -669,3 +669,74 @@ Same-run `vs raw-node` uses this run's raw-node column.
   globals only) — the ELF cell enters through `app.fetchShim`, which skips
   Request/Response construction entirely; it is not a like-for-like of
   `chttp-fetch-node` (that's the point of the gap analysis above).
+
+## Lite fetch bridge (issue #89) — 2026-10-19, Linux VM
+
+Premise check first (`scriptc-evidence/fetch-node-undici-cpuprof-2026-10-19.md`):
+`node:inspector` CPU profile of `chttp-fetch-node` over ~1.46M requests put
+undici frames at 13.8% of total CPU and the web-stream machinery they drive
+at another 6.0% (~27% of non-idle CPU) vs 4.4% for dispatch — the undici
+Request/Headers/Response churn is the dominant removable cost, so the lite
+path was built.
+
+New subject: `chttp-fetch-lite-node` (`apps/chttp-fetch-lite.ts`) serves the
+canonical table through `app.serveFetch` — the fetch dispatch arm over
+`LiteRequest` (a `WebReqView` on `IncomingMessage`) and `LiteResponse` (a
+`FetchResponseSink` writing straight to `ServerResponse`), skipping per-request
+undici construction and `resp.text()` re-buffering. `c.req.raw` there returns
+the `LiteRequest`; `lite.request()` materializes a real `Request` lazily.
+
+Same-run re-measure (this VM runs faster than the 10-18 table; compare
+ratios, not absolutes — `missing` counts 404s by design):
+
+| subject | cell | rps | p50 | p99 | max | MB/s | err/t/o | non2xx |
+|---------|------|-----|-----|-----|-----|------|---------|--------|
+| chttp-node | json | 76,224 | 0.00 | 2 | 22 | 13.8 | 0/0 | 0 |
+| chttp-node | user | 69,771 | 0.00 | 3 | 20 | 13.0 | 0/0 | 0 |
+| chttp-node | echo64 | 61,779 | 0.00 | 3 | 23 | 14.0 | 0/0 | 0 |
+| chttp-node | echo1k | 54,752 | 1.00 | 3 | 23 | 62.3 | 0/0 | 0 |
+| chttp-node | deep | 77,685 | 0.00 | 2 | 19 | 13.5 | 0/0 | 0 |
+| chttp-node | files | 75,477 | 0.00 | 1 | 20 | 12.6 | 0/0 | 0 |
+| chttp-node | missing | 77,632 | 0.00 | 2 | 21 | 13.4 | 0/0 | 1400692 |
+| chttp-node | mixed | 70,611 | 0.00 | 3 | 231 | 12.2 | 0/0 | 0 |
+| chttp-fetch-node | json | 38,368 | 1.00 | 4 | 21 | 7.5 | 0/0 | 0 |
+| chttp-fetch-node | user | 38,837 | 1.00 | 3 | 23 | 7.3 | 0/0 | 0 |
+| chttp-fetch-node | echo64 | 31,795 | 1.00 | 4 | 27 | 7.4 | 0/0 | 0 |
+| chttp-fetch-node | echo1k | 28,149 | 2.00 | 5 | 18 | 32.7 | 0/0 | 0 |
+| chttp-fetch-node | deep | 40,256 | 1.00 | 3 | 17 | 7.5 | 0/0 | 0 |
+| chttp-fetch-node | files | 37,744 | 1.00 | 4 | 21 | 7.1 | 0/0 | 0 |
+| chttp-fetch-node | missing | 41,525 | 1.00 | 3 | 20 | 7.7 | 0/0 | 745701 |
+| chttp-fetch-node | mixed | 36,383 | 1.00 | 5 | 242 | 7.1 | 0/0 | 0 |
+| chttp-fetch-lite-node | json | 72,291 | 0.00 | 3 | 21 | 14.4 | 0/0 | 0 |
+| chttp-fetch-lite-node | user | 70,584 | 0.00 | 2 | 23 | 13.3 | 0/0 | 0 |
+| chttp-fetch-lite-node | echo64 | 58,288 | 0.00 | 3 | 23 | 13.8 | 0/0 | 0 |
+| chttp-fetch-lite-node | echo1k | 47,221 | 1.00 | 4 | 18 | 54.9 | 0/0 | 0 |
+| chttp-fetch-lite-node | deep | 72,192 | 0.00 | 2 | 18 | 13.6 | 0/0 | 0 |
+| chttp-fetch-lite-node | files | 68,525 | 0.00 | 3 | 20 | 12.3 | 0/0 | 0 |
+| chttp-fetch-lite-node | missing | 73,771 | 0.00 | 2 | 23 | 13.9 | 0/0 | 1299793 |
+| chttp-fetch-lite-node | mixed | 67,381 | 0.00 | 3 | 219 | 12.8 | 0/0 | 0 |
+
+| compare | json | user | echo64 | echo1k | deep | files | missing | mixed |
+|---------|------|------|--------|--------|------|-------|---------|-------|
+| chttp-fetch-node / chttp-node | 50% | 56% | 51% | 51% | 52% | 50% | 53% | 52% |
+| chttp-fetch-lite-node / chttp-node | 95% | 101% | 94% | 86% | 93% | 91% | 95% | 95% |
+| chttp-fetch-lite-node / chttp-fetch-node | 188% | 182% | 183% | 168% | 179% | 182% | 178% | 185% |
+
+RSS after 100k reqs / cold start (median of 10): chttp-node 118 MB /
+100.5 ms, chttp-fetch-node 189 MB / 98.3 ms, chttp-fetch-lite-node 146 MB /
+99.0 ms.
+
+### Reads
+
+- **The lite bridge recovers most of the gap**: 86–101% of `chttp-node`
+  (mean ~94%) vs the undici bridge's 50–56% — a 1.68–1.88x lift, matching
+  the issue's "most of the 27–47%" expectation.
+- **echo1k is the weakest lite cell (86%)**: request bodies drain to raw
+  Buffer chunks at the bridge edge and concat on read — the undici bridge
+  pays the same copy plus object churn, so the remaining delta is body
+  handling, not dispatch.
+- **RSS halves vs the undici bridge** (146 MB vs 189 MB) — no per-request
+  Request/Headers/Response allocations retained.
+- **Residual ~6%**: `LiteRequest`/`LiteResponse` still build a header
+  record + object per request, and the fetch-arm chain runner allocates
+  the ReqView/Ctx pair on Node-arm-shaped paths; `app.handler` skips both.

@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 
 GATES=(
   bench/apps/chttp-fetch.ts
+  bench/apps/chttp-fetch-lite.ts
   bench/apps/fetch-surface.ts
   bench/apps/chttp-html.ts
   bench/apps/chttp-stream.ts

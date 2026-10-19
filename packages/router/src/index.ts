@@ -28,10 +28,21 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 // verified on 0.3.4), but an interface with the members we actually read
 // lowers at 100% static, and a real Request assigns to it structurally. The
 // field stays null on the Node arm, where `_raw` keeps the IncomingMessage.
+// WebHeadersView is the read-side view WebReqView keeps of a Request's
+// headers. Real `Headers` satisfy it structurally; the lite Node bridge
+// (lite.ts) supplies the same members over IncomingMessage.headers
+// without materializing a WHATWG Headers object per request.
+export interface WebHeadersView {
+  get(name: string): string | null;
+  has(name: string): boolean;
+  getSetCookie(): string[];
+  forEach(cb: (value: string, key: string) => void): void;
+}
+
 export interface WebReqView {
   method: string;
   url: string;
-  headers: Headers;
+  headers: WebHeadersView;
   body: ReadableStream<Uint8Array> | null;
   // Body readers used by declaration-driven buffering: `{ body: true }`
   // routes read via text() inside _dispatchPrim; multipart routes went
@@ -54,6 +65,7 @@ import type { DispatchFn, DispatchFetchFn } from "./gen.ts";
 import { UpgradeDispatch } from "./upgrade.ts";
 import type { Socket } from "node:net";
 import { ResponseSink, NodeResponseSink, FetchResponseSink } from "./sink.ts";
+import { LiteRequest, LiteResponse } from "./lite.ts";
 import {
   MultipartParser,
   MultipartStorage,
@@ -66,6 +78,7 @@ import type { MultipartFileSink, UploadedFile, DispositionParams } from "./multi
 
 export { GenDispatch, GenFetch };
 export { ResponseSink, NodeResponseSink, FetchResponseSink };
+export { LiteRequest, LiteResponse };
 export { MultipartParser, MultipartStorage, MemoryStorage, DiskStorage, multipartBoundary };
 export { memoryStorage, diskStorage } from "./multipart.ts";
 export type { MultipartFileSink, UploadedFile, DispositionParams };
@@ -1791,6 +1804,92 @@ export class App {
     };
   }
 
+  // Lite Node bridge for the fetch dispatch arm (issue #89): drives the
+  // same _genFetch/_dispatchPrim pipeline as app.fetch but over
+  // LiteRequest (WebReqView over IncomingMessage) and LiteResponse (a
+  // FetchResponseSink writing straight to the ServerResponse) — skipping
+  // the per-request undici Request/Headers/Response construction and
+  // resp.text() re-buffering a Request/Response bridge pays. Use it when
+  // serving the Web Standards arm on node:http; WinterCG hosts keep
+  // app.fetch.
+  //
+  // Behavioral notes vs the undici bridge:
+  //   - c.req.raw returns the LiteRequest (a WebReqView, not a real
+  //     Request). Consumers needing a host object call lite.request()
+  //     to materialize one lazily.
+  //   - Bodies decode lazily like app.fetch: the socket drains to raw
+  //     Buffer chunks at the edge (node dumps unread bodies on res.end),
+  //     and only { body: true } / multipart routes pay the utf8 decode.
+  //   - writeHead()-armed streaming flushes per chunk through res.write.
+  //   - A handler-returned Response is adopted: status/headers mirror
+  //     onto the ServerResponse and its body stream pumps to the socket.
+  fetchBridge(): (req: IncomingMessage, res: ServerResponse) => void {
+    const app = this;
+    return function (req: IncomingMessage, res: ServerResponse): void {
+      const lite = new LiteRequest(req);
+      const sink = new LiteResponse(res);
+      const method = lite.method;
+      const url = String(req.url || "/");
+      const hs = lite._hs;
+      const p = (async function (): Promise<void> {
+        // Multipart routes need byte-exact content — same pre-read rule
+        // as app.fetch (text() would mangle binary bytes through utf8).
+        let bodyU8: Uint8Array | null = null;
+        let ct = "";
+        if (Object.prototype.hasOwnProperty.call(hs, "content-type")) {
+          ct = hs["content-type"];
+        }
+        if (ct !== "" && method !== "GET" && method !== "HEAD") {
+          if (String(ct).toLowerCase().indexOf("multipart/form-data") === 0) {
+            bodyU8 = new Uint8Array(await lite.arrayBuffer());
+          }
+        }
+        const handled = await app._genFetch(method, url, hs, lite, "", bodyU8, sink);
+        if (handled === false) {
+          await app._dispatchPrim(method, url, hs, lite, "", bodyU8, sink);
+        }
+        // Adopted Response bodies (handler returned a Response) pump to
+        // the socket here — adopt() already mirrored status + headers.
+        const a = sink.adopted;
+        if (a !== null) {
+          const b = a.body;
+          if (b !== null) {
+            const reader = b.getReader();
+            const step = function (): void {
+              reader.read().then(
+                function (v: ReadableStreamReadResult<Uint8Array>): void {
+                  if (v.done === true) {
+                    res.end();
+                    return;
+                  }
+                  res.write(v.value);
+                  step();
+                },
+                function (): void {
+                  res.end();
+                },
+              );
+            };
+            step();
+            return;
+          }
+          if (res.writableEnded === false) {
+            res.end();
+          }
+        }
+      })();
+      // The bridge is fire-and-forget like handler(); a rejection cannot
+      // escape _dispatchPrim's guarded chain paths, but keep the promise
+      // observed so a surprise throw never surfaces unhandled.
+      p.then(
+        function (): void {},
+        function (): void {
+          res.destroy();
+        },
+      );
+    };
+  }
+
   serve(opts: { port: number }): Server;
   serve(opts: { port: number; host: string }): Server;
   serve(opts: { port: number; host?: string }): Server {
@@ -1798,6 +1897,21 @@ export class App {
     // upgrades wire server.on("upgrade", app.upgradeHandler()) themselves
     // after serve() returns the server, typed at their own call site.
     const s = http.createServer(this.handler());
+    if (opts.host === null || opts.host === undefined) {
+      s.listen(Number(opts.port));
+    } else {
+      s.listen(Number(opts.port), String(opts.host));
+    }
+    return s;
+  }
+
+  // Opt-in Node server over fetchBridge() (issue #89): same options shape
+  // as serve(), for apps that want the fetch dispatch arm without the
+  // undici Request/Response bridge cost.
+  serveFetch(opts: { port: number }): Server;
+  serveFetch(opts: { port: number; host: string }): Server;
+  serveFetch(opts: { port: number; host?: string }): Server {
+    const s = http.createServer(this.fetchBridge());
     if (opts.host === null || opts.host === undefined) {
       s.listen(Number(opts.port));
     } else {
