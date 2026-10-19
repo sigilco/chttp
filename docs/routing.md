@@ -5,8 +5,10 @@ Routes are registered per method: `app.get | post | put | delete | patch | head 
 Paths support static segments, `:param`, and a tail `*` wildcard.
 
 ```ts
-app.get("/user/:id", (c) => c.req.param("id")); // literal-typed: 'id'
-app.get("/wild/*", (c) => c.req.param("*"));
+import { CtxCore } from "@chttp/router";
+
+app.get("/user/:id", (c: CtxCore) => c.req.param("id")); // literal-typed: 'id'
+app.get("/wild/*", (c: CtxCore) => c.req.param("*"));
 ```
 
 ## Semantics

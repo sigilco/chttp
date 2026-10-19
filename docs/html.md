@@ -16,13 +16,14 @@
 | `isVoidElement`, `isValidTag`, `isValidAttrName` | `(s: string) => boolean` | Exposed helpers |
 
 ```ts
+import { CtxCore } from "@chttp/router";
 import { BARE, escapeHtml, h, html } from "@chttp/html";
 
 function Todo(props: { text: string; done: boolean }): string {
   return h("li", ["class", props.done ? "done" : "open"], [escapeHtml(props.text)]);
 }
 
-app.get("/todos", (c) =>
+app.get("/todos", (c: CtxCore) =>
   c.html(
     h("ul", [], [Todo({ text: "<b>ship</b>", done: false })]) +
       h("input", ["disabled", BARE, "value", "x"], []),

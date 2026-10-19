@@ -58,12 +58,12 @@ Mark a routes module:
 
 ```ts
 // src/routes.chttp.ts
-import { createRouter } from '@chttp/router'
+import { CtxCore, createRouter } from '@chttp/router'
 
 export const app = createRouter()
 
-app.get('/user/:id', (c) => c.json({ id: c.req.param('id') }))
-app.post('/echo', (c) => c.text(c.req.body()), { body: true })
+app.get('/user/:id', (c: CtxCore) => c.json({ id: c.req.param('id') }))
+app.post('/echo', (c: CtxCore) => c.text(c.req.body()), { body: true })
 ```
 
 Wire the generated dispatch:

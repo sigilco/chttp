@@ -3,11 +3,11 @@
 `@chttp/static` serves files and single page apps from a directory or from bytes baked into the binary. It depends on `@chttp/router` only and is authored in the scriptc subset, so it compiles into the same native ELF as the rest of your app.
 
 ```ts
-import { createRouter } from "@chttp/router";
+import { CtxCore, createRouter } from "@chttp/router";
 import { DiskAssets, serveStatic } from "@chttp/static";
 
 const app = createRouter();
-app.get("/api/ping", (c) => c.json({ ok: true }));
+app.get("/api/ping", (c: CtxCore) => c.json({ ok: true }));
 serveStatic(app, "/", new DiskAssets("./web/dist"), { spa: true });
 app.serve({ port: 3000 });
 ```

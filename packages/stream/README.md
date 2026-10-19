@@ -3,12 +3,12 @@
 Server-Sent Events and chunked text streaming for [@chttp/router](https://github.com/sigilco/chttp), authored inside the scriptc compilable subset so it compiles into the same native binary.
 
 ```ts
-import { createRouter } from "@chttp/router";
+import { CtxCore, createRouter } from "@chttp/router";
 import { streamSSE } from "@chttp/stream";
 
 const app = createRouter();
 
-app.get("/clock", (c) =>
+app.get("/clock", (c: CtxCore) =>
   streamSSE(c, (s) => {
     const t = setInterval(() => s.send(new Date().toISOString(), "tick"), 1000);
     s.onAbort(() => clearInterval(t));

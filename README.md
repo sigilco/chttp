@@ -22,14 +22,14 @@ npm i @chttp/router
 Import:
 
 ```ts
-import { createRouter } from "@chttp/router";
+import { CtxCore, createRouter } from "@chttp/router";
 
 const app = createRouter();
 
-app.get("/", (c) => c.text("hi"));
-app.get("/user/:id", (c) => c.json({ id: c.req.param("id") }));
-app.post("/echo", (c) => c.text(c.req.body()));
-app.notFound((c) => c.status(404).text("not found"));
+app.get("/", (c: CtxCore) => c.text("hi"));
+app.get("/user/:id", (c: CtxCore) => c.json({ id: c.req.param("id") }));
+app.post("/echo", (c: CtxCore) => c.text(c.req.body()));
+app.notFound((c: CtxCore) => c.status(404).text("not found"));
 
 app.serve({ port: 3000 });
 ```
@@ -39,8 +39,8 @@ app.serve({ port: 3000 });
 Static segments, `:param`, and a tail `*` wildcard:
 
 ```ts
-app.get("/user/:id", (c) => c.req.param("id")); // 'id' is literal-typed
-app.get("/wild/*", (c) => c.req.param("*"));
+app.get("/user/:id", (c: CtxCore) => c.req.param("id")); // 'id' is literal-typed
+app.get("/wild/*", (c: CtxCore) => c.req.param("*"));
 app.all("/any-method", handler);
 app.on("m-search", "/custom", handler);
 ```
@@ -88,13 +88,13 @@ c.redirect("/elsewhere", 302);
 registered after it (snapshot semantics):
 
 ```ts
-app.use((c, next) => {
+app.use((c: CtxCore, next) => {
   c.header("x-start", Date.now().toString());
   next();
 });
 
 // path-scoped: `*` matches every path, `/api/*` is a prefix
-app.use("/api/*", async (c, next) => {
+app.use("/api/*", async (c: CtxCore, next) => {
   await auth(c.req);
   await next();
 });
@@ -116,7 +116,7 @@ at 100% static).
 
 ```ts
 const app = createRouter();
-app.get("/user/:id", (c) => c.json({ id: c.req.param("id") }));
+app.get("/user/:id", (c: CtxCore) => c.json({ id: c.req.param("id") }));
 
 // Cloudflare Workers / Deno Deploy / Bun / Service Worker
 export default { async fetch(req, env, ctx) { return app.fetch(req, env, ctx); } };
@@ -201,7 +201,7 @@ same band as [valibot](https://github.com/open-circle/valibot).
 import * as v from "@chttp/val";
 
 const Order = v.strictObject({ id: v.pipe(v.string(), v.uuid()) });
-app.post("/order", (c) => {
+app.post("/order", (c: CtxCore) => {
   const r = v.safeParse(Order, JSON.parse(c.req.body()));
   return r.success
     ? c.json({ ok: true })

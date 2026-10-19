@@ -3,7 +3,7 @@
 Middleware is `(c, next) => void | Promise<void>` — sync or async. `next()` returns the tail's result, so `await next()` in an async middleware waits for the rest of the chain to settle.
 
 ```ts
-app.use((c, next) => {
+app.use((c: CtxCore, next) => {
   c.header("x-start", Date.now().toString());
   next();
 });
@@ -26,16 +26,16 @@ Every snippet below is written in the scriptc subset (indexed `for` loops, `| nu
 Two pieces, because of how dispatch orders things: an `OPTIONS` request to a path that only has `GET`/`POST` registered fails with 405 *before any middleware runs*, so a middleware alone cannot answer preflight. The working shape is a `use()` middleware for the response headers plus one explicit `app.options()` route per path (or `app.all()` with an in-handler method check) that answers the preflight with 204.
 
 ```ts
-import type { Ctx } from "@chttp/router";
+import type { CtxCore } from "@chttp/router";
 
 // 1. Response headers on every actual request (apply to routes after this use()).
-app.use((c: Ctx, next: () => unknown): unknown => {
+app.use((c: CtxCore, next: () => unknown): unknown => {
   c.header("access-control-allow-origin", "*");
   return next();
 });
 
 // 2. Explicit preflight answer: 204, no body.
-function preflight(c: Ctx): void {
+function preflight(c: CtxCore): void {
   c.status(204)
     .header("access-control-allow-origin", "*")
     .header("access-control-allow-methods", "GET,POST,PUT,DELETE,OPTIONS")
@@ -48,11 +48,11 @@ function preflight(c: Ctx): void {
   c.sent = true; // tells dispatch this middleware answered
 }
 
-app.options("/users", (c: Ctx) => {
+app.options("/users", (c: CtxCore) => {
   preflight(c);
 });
-app.get("/users", (c: Ctx) => c.json({ users: 1 }));
-app.post("/users", (c: Ctx) => c.json({ ok: true }), { body: true });
+app.get("/users", (c: CtxCore) => c.json({ users: 1 }));
+app.post("/users", (c: CtxCore) => c.json({ ok: true }), { body: true });
 ```
 
 With credentials instead of `*`: echo the request's `origin` header and add `access-control-allow-credentials: true`. For many paths, a shared `app.all("/*", ...)` fallback also answers preflight (a splat route matches paths with no other registration), but paths that have any method registered need their own `app.options()` entry or the 405 wins.
@@ -71,7 +71,7 @@ function fnv1a(s: string): string {
   return h.toString(16);
 }
 
-app.get("/users", (c: Ctx) => {
+app.get("/users", (c: CtxCore) => {
   const body: string = JSON.stringify({ users: [1, 2] });
   const etag: string = '"' + fnv1a(body) + '"';
   const inm: string | null = c.req.header("if-none-match");
@@ -101,7 +101,7 @@ The comparison is exact equality against a single etag. Browsers may send a comm
 Async middleware: `await next()` waits until the chain settles, so `Date.now()` after it includes the handler's async work. Duration goes to stdout, not a response header, because the response may already be flushed (the flush rule above).
 
 ```ts
-app.use(async (c: Ctx, next: () => unknown): Promise<void> => {
+app.use(async (c: CtxCore, next: () => unknown): Promise<void> => {
   const t0: number = Date.now();
   await next();
   console.log(c.req.method + " " + c.req.path + " " + String(Date.now() - t0) + "ms");
@@ -115,7 +115,7 @@ Register it before the routes you want logged; routes registered earlier carry n
 Sync middleware that sets headers before `next()`; they land on every response from routes registered after it.
 
 ```ts
-app.use((c: Ctx, next: () => unknown): unknown => {
+app.use((c: CtxCore, next: () => unknown): unknown => {
   c.header("x-content-type-options", "nosniff");
   c.header("x-frame-options", "DENY");
   c.header("referrer-policy", "no-referrer");
@@ -141,7 +141,7 @@ const WINDOW_MS: number = 60000; // window length
 
 const buckets: { [k: string]: Bucket } = {};
 
-function rateLimit(c: Ctx, next: () => unknown): unknown {
+function rateLimit(c: CtxCore, next: () => unknown): unknown {
   const key: string = c.req.header("x-api-key") === null ? "anon" : String(c.req.header("x-api-key"));
   const now: number = Date.now();
   const cur: Bucket | null = buckets[key] === undefined ? null : buckets[key];
@@ -177,13 +177,13 @@ A true `server-timing: app;dur=N` header needs the duration *before* the body is
 
 ```ts
 // start stamp: header lands (set before the handler can flush)
-app.use((c: Ctx, next: () => unknown): unknown => {
+app.use((c: CtxCore, next: () => unknown): unknown => {
   c.header("x-request-start", String(Date.now()));
   return next();
 });
 
 // duration: log it, the response is already flushed by the time you know it
-app.use(async (c: Ctx, next: () => unknown): Promise<void> => {
+app.use(async (c: CtxCore, next: () => unknown): Promise<void> => {
   const t0: number = Date.now();
   await next();
   console.log(c.req.path + " " + String(Date.now() - t0) + "ms");

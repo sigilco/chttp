@@ -47,10 +47,10 @@ Use this when you need npm packages outside the scriptc subset. See [Run targets
 The canonical entry is `app.fetch(req: Request) → Promise<Response>`. The same `createRouter()` symbol works on Cloudflare Workers, Deno Deploy, Bun, Vercel Edge, Netlify Edge, Supabase, and as a Service Worker. `app.handler()` is a thin Node adapter around `fetch()` for `node:http` users.
 
 ```ts
-import { createRouter } from "@chttp/router";
+import { CtxCore, createRouter } from "@chttp/router";
 
 const app = createRouter();
-app.get("/user/:id", (c) => c.json({ id: c.req.param("id") }));
+app.get("/user/:id", (c: CtxCore) => c.json({ id: c.req.param("id") }));
 
 // Cloudflare Workers / Deno Deploy / Bun / Vercel Edge / Service Worker
 export default {

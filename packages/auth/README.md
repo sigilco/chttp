@@ -7,6 +7,7 @@ Every function is string-in/string-out or boolean-out; none of them touches a re
 ## Quickstart
 
 ```ts
+import { CtxCore } from "@chttp/router";
 import {
   MemorySessionStore,
   buildSessionCookie,
@@ -18,14 +19,14 @@ import {
 
 const store = new MemorySessionStore(); // dev/test only — see below
 
-app.post("/login", async (c) => {
+app.post("/login", async (c: CtxCore) => {
   const token = generateSessionToken();
   await createSession(store, token, "user-1", { role: "admin" });
   c.header("set-cookie", buildSessionCookie(token, { secure: false }));
   return c.status(201).text("ok");
 });
 
-app.get("/me", async (c) => {
+app.get("/me", async (c: CtxCore) => {
   const tok = readCookie(c.req.header("cookie"), "session");
   const rec = tok === null ? null : await validateSessionToken(store, tok);
   if (rec === null) return c.status(401).text("unauthorized");
