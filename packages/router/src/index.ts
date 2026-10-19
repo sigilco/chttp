@@ -72,6 +72,7 @@ export type { MultipartFileSink, UploadedFile, DispositionParams };
 export type { DispatchFn, DispatchFetchFn };
 export { ROUTE_CONTRACT_VERSION };
 export { UpgradeDispatch };
+export type { UpgradeFn } from "./upgrade.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -1759,7 +1760,13 @@ export class App {
   upgradeHandler(): (req: IncomingMessage, socket: Socket, head: Buffer) => void {
     const app = this;
     return function (req: IncomingMessage, socket: Socket, head: Buffer): void {
-      if (!app._up(req, socket, head)) {
+      try {
+        if (!app._up(req, socket, head)) {
+          socket.destroy();
+        }
+      } catch (e) {
+        // A throwing upgrade implementation must not crash the process:
+        // drop the connection, same as an unhandled upgrade.
         socket.destroy();
       }
     };

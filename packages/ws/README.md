@@ -14,7 +14,9 @@ class Echo extends WsHandler {
 
 const app = createRouter();
 app.withUpgrade(new WsRouter().ws("/echo", new Echo()).ws("/room/:name", new Echo()));
-app.serve({ port: 3000 });
+const server = app.serve({ port: 3000 });
+// serve() never attaches "upgrade": wire it in your own program.
+server.on("upgrade", app.upgradeHandler());
 ```
 
 Handlers subclass `WsHandler` and override `open`, `message`, `binary` and `close`. `WsConn` exposes `send`, `sendBinary`, `ping`, `close` and `param`. Messages above `maxPayload` (1 MiB by default) close the connection with 1009. No permessage-deflate.
