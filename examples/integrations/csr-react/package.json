@@ -7,7 +7,7 @@
     "build:web": "vite build",
     "bake": "node scripts/bake.mjs",
     "vendor": "node scripts/vendor.mjs",
-    "build": "node scripts/bake.mjs && node scripts/vendor.mjs && scriptc build src/main.baked.ts -o app",
+    "build": "vite build && node scripts/bake.mjs && node scripts/vendor.mjs && scriptc build src/main.baked.ts -o app",
     "start": "node --experimental-strip-types src/main.ts",
     "start:elf": "./app",
     "test": "node --experimental-strip-types --test test/csr.test.ts"
