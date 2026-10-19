@@ -1,6 +1,6 @@
 {
   "name": "@chttp/unplugin",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Build-time route-lowering bundler plugin for chttp",
   "keywords": [
     "aot",

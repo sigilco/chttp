@@ -1,5 +1,16 @@
 # @chttp/stream
 
+## 0.4.0
+
+### Minor Changes
+
+- feat(router): Web Standards generated-dispatch arm (GenFetch/withFetchDispatch, contract v4) + fetch emitter in unplugin; @chttp/stream streams through FetchResponseSink as a real ReadableStream
+
+### Patch Changes
+
+- Updated dependencies:
+  - @chttp/router@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes

@@ -1,5 +1,27 @@
 # @chttp/router
 
+## 0.4.0
+
+### Minor Changes
+
+- feat(router): Web Standards generated-dispatch arm (GenFetch/withFetchDispatch, contract v4) + fetch emitter in unplugin; @chttp/stream streams through FetchResponseSink as a real ReadableStream
+
+- feat(ctx): typed `c.res` response view on both surfaces — `.status`, `.header(name)`, `.headers` (plus `statusCode`/`nodeRes()` escape hatches for the Node surface). `use()` middleware now also wraps the notFound chain, and `c.req.url` reports the absolute URL on `app.fetch` (Hono parity for hono/logger's outbound `-->` line).
+
+- feat(router): lite Node fetch bridge (issue #89) — `app.fetchBridge()`/`app.serveFetch()` drive the fetch dispatch arm over `LiteRequest` (`WebReqView` over `IncomingMessage`) and `LiteResponse` (a `FetchResponseSink` writing straight to `ServerResponse`), skipping per-request undici `Request`/`Headers`/`Response` construction; `WebReqView.headers` narrows to the structural `WebHeadersView`. `c.req.raw` on the lite surface returns the `LiteRequest`; `lite.request()` materializes a real undici `Request` lazily for `fetch(c.req.raw)`-style consumers. Bench: `chttp-fetch-lite-node` runs at 86–101% of `chttp-node` vs the undici bridge's 50–56% (bench/RESULTS-v2.md).
+
+- fetch(app.fetch) passthrough contract: capture the Web Request into c.req.raw, adopt handler-returned Response objects (incl. streams), and stop eager body buffering on undeclared routes
+
+- Typed HTTP client at `@chttp/router/client`: `createClient(baseUrl)` + `get`/`post`/`put`/`patch`/`delete`/`request` over a minimal HTTP/1.1 transport on `node:net`/`node:tls` — no `fetch`, so the same source compiles into an app ELF. `ClientInput<P>` checks `params` keys against `ParamKey<P>` on Node.js (`.d.ts` surface only — compiled apps bind a `ClientCore` receiver and get the concrete signatures); response types are caller-declared per call. One request per connection (`Connection: close`), chunked responses decoded, no redirects/streaming in v1.
+
+### Patch Changes
+
+- fix(req): `c.req.header(name)` no longer crashes on absent headers in single-graph (vendored/program-code) scriptc builds — `_headers`/`_headersDistinct` are probed with `hasOwnProperty` before indexing instead of a bare record read that throws "record has no key".
+
+- empty-body responses send no content-type (Hono parity); default text/plain charset is UTF-8
+
+- feat(ws): post-merge audit hardening for issue #13 — `allowOrigin` exact-match allowlist (403), `Sec-WebSocket-Key` base64/16-byte format check, peer close-reason UTF-8 validation (1007); `upgradeHandler()` catches a throwing dispatch and destroys the socket; `UpgradeFn` re-exported
+
 ## 0.3.0
 
 ### Minor Changes
