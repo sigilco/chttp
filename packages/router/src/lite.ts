@@ -334,22 +334,13 @@ export class LiteResponse extends FetchResponseSink {
 
   appendHeader(k: string, v: string): void {
     super.appendHeader(k, v);
-    // Multi-value arm: gather every value the append-only tail holds for
-    // this key — node setHeader(string[]) emits one line per value,
-    // matching the wire shape toResponse() produces for real Headers.
-    const kk = String(k);
-    const vals: string[] = [];
-    const list = this.hdrList;
-    for (let i = 0; i + 1 < list.length; i += 2) {
-      if (list[i] === kk) {
-        vals.push(list[i + 1]);
-      }
-    }
-    if (vals.length === 1) {
-      this._res.setHeader(kk, vals[0]);
-    } else {
-      this._res.setHeader(kk, vals);
-    }
+    // Same subset limit as NodeResponseSink.appendHeader: scriptc lowers
+    // neither res.setHeader(string[]) nor res.appendHeader, so under the
+    // lite Node bridge a repeated set-cookie collapses to last-write-
+    // wins on the wire (the append-only hdrList still preserves the full
+    // list for adopted/toResponse-style consumers). Use app.fetch when
+    // real multi-cookie emission matters.
+    this._res.setHeader(String(k), String(v));
   }
 
   writeBody(s: string): void {

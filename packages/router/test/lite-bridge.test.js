@@ -67,7 +67,11 @@ test("lite bridge: c.req.url is absolute, raw is a WebReqView (not a Request)", 
   srv.close();
 });
 
-test("lite bridge: multi-value set-cookie survives to the wire", async () => {
+test("lite bridge: appended set-cookie collapses to last-write-wins (scriptc subset limit)", async () => {
+  // LiteResponse must compile under scriptc, which lowers neither
+  // res.setHeader(string[]) nor res.appendHeader — so repeated
+  // set-cookie matches NodeResponseSink's documented behavior and only
+  // the last value reaches the wire. app.fetch keeps true multi-cookie.
   const app = createRouter();
   app.get("/cookies", (c) => {
     c.header("set-cookie", "a=1", { append: true });
@@ -76,7 +80,7 @@ test("lite bridge: multi-value set-cookie survives to the wire", async () => {
   });
   const { srv, base } = await serve(app);
   const r = await fetch(base + "/cookies");
-  assert.deepEqual(r.headers.getSetCookie(), ["a=1", "b=2"]);
+  assert.deepEqual(r.headers.getSetCookie(), ["b=2"]);
   srv.close();
 });
 
