@@ -26,6 +26,7 @@ Helpers write at statement level and return `c` for chaining. After one runs, th
 c.json({ ok: true });
 c.text("plain");
 c.html("<h1>hi</h1>");
+c.bytes(new Uint8Array([0xff, 0xd8]), "image/jpeg"); // binary body
 c.status(201).json({ created: true });
 c.header("x-trace", "abc");
 c.redirect("/elsewhere", 302);

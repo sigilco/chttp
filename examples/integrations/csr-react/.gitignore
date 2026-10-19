@@ -1,0 +1,5 @@
+.vendor/
+dist/
+app
+src/assets.gen.ts
+node_modules/

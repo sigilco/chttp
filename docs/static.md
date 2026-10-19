@@ -16,45 +16,60 @@ app.serve({ port: 3000 });
 
 `AssetSource` is the port: one method, `get(path): Asset | null`, where `path` is decoded, relative to the root and has no leading slash. Strategies are subclasses.
 
-| Source | Reads from | Notes |
-| --- | --- | --- |
+| Source             | Reads from                   | Notes                                                                                                            |
+| ------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `DiskAssets(root)` | the filesystem, as `Buffer`s | stats on every request, re-reads only when mtime or size changed, SHA-1 ETag computed on first request of a path |
-| `EmbeddedAssets` | bytes held in the program | `add(path, asset)` or `load(records)` with a baked array of `EmbedRecord` |
+| `EmbeddedAssets`   | bytes held in the program    | `add(path, asset)` or `load(records)` with a baked array of `EmbedRecord`                                        |
 
 An `Asset` is a plain record: `body` (Buffer), `type`, `etag`, `size`, `mtimeMs`, `immutable` and `encodings` (precompressed variants, each with its own `enc`, `body` and `etag`).
 
-Baked data must be an array of records, not a path-keyed object: the subset cannot index a string-keyed JSON object. The planned `assets` slice of `@chttp/unplugin` will emit a subclass of `EmbeddedAssets` whose constructor calls `load()` with such an array (`path`, `type`, `b64`, `etag`, `mtimeMs`, `immutable`, `encs`).
+Baked data must be an array of records, not a path-keyed object: the subset cannot index a string-keyed JSON object. The `assets` slice recipe emits a subclass of `EmbeddedAssets` whose constructor calls `load()` with such an array (`path`, `type`, `b64`, `etag`, `mtimeMs`, `immutable`, `encs`) — see "Baking assets into the binary" below.
 
 ## serveStatic
 
 `serveStatic(app, prefix, src, opts?)` registers a GET splat route (HEAD comes from the router's GET fallback). `"/"` serves from the root, `"/assets"` serves `/assets/*`.
 
-| Behaviour | Detail |
-| --- | --- |
-| Traversal | The splat is already percent-decoded, so `%2e%2e` and `..%2f` arrive as `..` segments and answer 403. Backslash, NUL, drive-letter tails (`C:/...`) and absolute tails are refused too |
-| Dotfiles | Any segment starting with `.` answers 404, except `.well-known` |
-| Symlinks | Paths are resolved with `realpath` before serving. A link that stays inside the root keeps working; one that escapes it answers 404 |
-| Directories | `/docs/` and `/docs` serve `docs/index.html` |
-| MIME | Built-in table by extension, `application/octet-stream` otherwise |
-| Validators | Quoted ETag on every response, `Last-Modified` when the mtime is known. `If-None-Match` (including `W/` and `*`) answers 304 with no body |
-| Cache-Control | `public, max-age=31536000, immutable` for hashed filenames, `no-cache` for HTML, `opts.cacheControl` (default `no-cache`) for the rest |
-| Compression | If `app.js.br` or `app.js.gz` sit next to `app.js` (or are in `encodings`), the client's `accept-encoding` picks `br` over `gzip`; `Vary: accept-encoding` is always set for such assets. Codings match exactly and case-insensitively, never by substring. `q=0` (or `q=0.0`, `q=0.000`) excludes a coding; other q-values are not ranked, so the fixed br-over-gzip preference decides |
-| SPA fallback | With `spa: true`: GET or HEAD, `accept` contains `text/html`, and the path has no extension serves the index file. Missing assets with an extension stay 404 |
-| API prefixes | Paths under `opts.api` (default `["/api"]`) never reach the filesystem or the fallback, and an unmatched one answers `{"error":"not_found"}` with status 404 |
+| Behaviour     | Detail                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Traversal     | The splat is already percent-decoded, so `%2e%2e` and `..%2f` arrive as `..` segments and answer 403. Backslash, NUL, drive-letter tails (`C:/...`) and absolute tails are refused too                                                                                                                                                                                                   |
+| Dotfiles      | Any segment starting with `.` answers 404, except `.well-known`                                                                                                                                                                                                                                                                                                                          |
+| Symlinks      | Paths are resolved with `realpath` before serving. A link that stays inside the root keeps working; one that escapes it answers 404                                                                                                                                                                                                                                                      |
+| Directories   | `/docs/` and `/docs` serve `docs/index.html`                                                                                                                                                                                                                                                                                                                                             |
+| MIME          | Built-in table by extension, `application/octet-stream` otherwise                                                                                                                                                                                                                                                                                                                        |
+| Validators    | Quoted ETag on every response, `Last-Modified` when the mtime is known. `If-None-Match` (including `W/` and `*`) answers 304 with no body                                                                                                                                                                                                                                                |
+| Cache-Control | `public, max-age=31536000, immutable` for hashed filenames, `no-cache` for HTML, `opts.cacheControl` (default `no-cache`) for the rest                                                                                                                                                                                                                                                   |
+| Compression   | If `app.js.br` or `app.js.gz` sit next to `app.js` (or are in `encodings`), the client's `accept-encoding` picks `br` over `gzip`; `Vary: accept-encoding` is always set for such assets. Codings match exactly and case-insensitively, never by substring. `q=0` (or `q=0.0`, `q=0.000`) excludes a coding; other q-values are not ranked, so the fixed br-over-gzip preference decides |
+| SPA fallback  | With `spa: true`: GET or HEAD, `accept` contains `text/html`, and the path has no extension serves the index file. Missing assets with an extension stay 404                                                                                                                                                                                                                             |
+| API prefixes  | Paths under `opts.api` (default `["/api"]`) never reach the filesystem or the fallback, and an unmatched one answers `{"error":"not_found"}` with status 404                                                                                                                                                                                                                             |
 
 Hashed filenames are detected by name: the last `-` or `.` separated token of the stem is 8 to 32 alphanumerics mixing letters and digits (`index-Ab3dE9fG.js`, `chunk.3f9a1c2e.css`). Date-like tokens such as `report-20241014.pdf` are not hashed.
 
 ## Options
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `spa` | `false` | enable the SPA fallback |
-| `api` | `["/api"]` | prefixes owned by the API |
-| `index` | `"index.html"` | directory index and SPA shell |
-| `cacheControl` | `"no-cache"` | for non-hashed, non-HTML assets |
+| Option         | Default        | Meaning                         |
+| -------------- | -------------- | ------------------------------- |
+| `spa`          | `false`        | enable the SPA fallback         |
+| `api`          | `["/api"]`     | prefixes owned by the API       |
+| `index`        | `"index.html"` | directory index and SPA shell   |
+| `cacheControl` | `"no-cache"`   | for non-hashed, non-HTML assets |
 
 ## Compiling to an ELF
 
 The package is covered at 100% by `scriptc coverage packages/static/gate.ts`, and `scriptc build` produces a binary that serves images byte for byte (sha256 verified through curl). Two subset notes from authoring it: reading a missing key from a string-keyed record throws in a native binary, so presence is tested with `in` and keys are prefixed to avoid prototype names; and `httpDate()` is hand-rolled from the `getUTC*` getters until `toUTCString` lowers.
 
 Not included: range requests, `If-Modified-Since`, ISR caching.
+
+## Baking assets into the binary
+
+`EmbeddedAssets` holds every byte inside the program, so `scriptc build` emits one binary that needs no filesystem access. The recipe: after `vite build`, run a small script that walks `dist/` and emits a generated `EmbeddedAssets` subclass whose constructor calls `load(records)` — [`examples/integrations/csr-react`](https://github.com/sigilco/chttp/tree/main/examples/integrations/csr-react) ships a working one (`scripts/bake.mjs` → `src/assets.gen.ts`).
+
+Two ways to get the bytes into the binary, measured on the frontend probes (`bench/scriptc-evidence/frontend-probes-2026-10-14.txt`, 273 KB of assets, scriptc 0.3.1):
+
+|                 | JSON-baked (case 6)                                  | FFI blob (case 9)                                   |
+| --------------- | ---------------------------------------------------- | --------------------------------------------------- |
+| Mechanism       | array of `{path,type,b64,…}` records in program code | static C arrays linked via `--ffi ffi.json`         |
+| Binary overhead | ~= base64 size (+365 KB)                             | ~= raw size + page alignment (+303 KB, ~9% smaller) |
+| Startup load    | ~0.15 ms base64 decode                               | ~0.055 ms buffer copy                               |
+| Toolchain       | none extra                                           | `cc -c` + `ffi.json` manifest                       |
+
+JSON-baked is the default recipe: zero toolchain, and base64 decode cost is noise at any realistic bundle size. Reach for the FFI variant only when binary size is a hard constraint; it needs a C file, an object per target, and a `mutable-bytes` copy function (ffi format ≥ 6).
