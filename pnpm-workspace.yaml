@@ -4,6 +4,7 @@ packages:
   - examples/sse-clock
   - examples/ws-echo
   - examples/rate-limit
+  - examples/pages
   - examples/backpressure
   - examples/integrations/*
   - bench
@@ -28,6 +29,7 @@ versioning:
     - chttp-example-logging-file-audit
     - chttp-example-otlp-traces
     - chttp-example-prometheus-metrics
+    - chttp-example-pages
     - chttp-example-rate-limit
     - chttp-example-sse-clock
     - chttp-example-webhook-server

@@ -1,0 +1,19 @@
+{
+  "name": "chttp-example-pages",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "scriptc build src/main.ts -o app",
+    "start": "./app",
+    "start:node": "node --experimental-strip-types src/main.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@chttp/html": "workspace:*",
+    "@chttp/router": "workspace:*"
+  },
+  "devDependencies": {
+    "scriptc": ">=0.3.2"
+  }
+}

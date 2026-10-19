@@ -4,6 +4,7 @@ import { createRouter } from "../../packages/router/src/index.ts";
 import {
   BARE,
   Fragment,
+  IsrPage,
   createElement,
   escapeHtml,
   h,
@@ -11,6 +12,7 @@ import {
   isValidAttrName,
   isValidTag,
   isVoidElement,
+  page,
   raw,
 } from "../../packages/html/src/index.ts";
 
@@ -23,7 +25,7 @@ const app = createRouter();
 app.get("/page", (c) => {
   const q = c.req.query("q");
   const name = q === null ? "world" : q;
-  const page = Fragment([
+  const pageMarkup = Fragment([
     h("meta", ["charset", "utf-8"], []),
     Card("hi " + name, html`<p>${name}</p>`),
     createElement("input", ["disabled", BARE, "value", name]),
@@ -31,7 +33,14 @@ app.get("/page", (c) => {
     h("div", ["safe", "true"], ["<b>" + name + "</b>"]),
   ]);
   const ok = isValidTag("div") && isValidAttrName("data-x") && isVoidElement("br");
-  return c.html(ok ? page : "");
+  return c.html(ok ? pageMarkup : "");
 });
+
+const index = new IsrPage(
+  () => page(h("title", [], ["home"]), Card("isr", html`<p>cached</p>`)),
+  30,
+);
+
+app.get("/isr", (c) => c.html(index.html() + index.freshUntil()));
 
 app.serve({ port: Number(process.argv[2] || 3000) });

@@ -4,16 +4,16 @@
 
 ## API
 
-| Export | Signature | Notes |
-| --- | --- | --- |
-| `escapeHtml` | `(s: string) => string` | Escapes `& < " '` to `&amp; &lt; &#34; &#39;`, same bytes as kitajs. Charcode loop, no regex |
-| `h` | `(tag: string, attrs: string[], kids: string[]) => string` | `attrs` is a flat `[name, value, ...]` array. Void elements self close |
-| `createElement` | `(name: string, attrs: string[], ...children: string[]) => string` | kitajs shaped alias of `h` |
-| `Fragment` | `(kids: string[]) => string` | Siblings without a wrapper |
-| `html` | tagged template | Escapes interpolations, static text is trusted markup |
-| `raw` | tagged template | No escaping, for composing already rendered markup |
-| `BARE` | `string` | Attribute value sentinel for bare boolean attributes |
-| `isVoidElement`, `isValidTag`, `isValidAttrName` | `(s: string) => boolean` | Exposed helpers |
+| Export                                           | Signature                                                          | Notes                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `escapeHtml`                                     | `(s: string) => string`                                            | Escapes `& < " '` to `&amp; &lt; &#34; &#39;`, same bytes as kitajs. Charcode loop, no regex |
+| `h`                                              | `(tag: string, attrs: string[], kids: string[]) => string`         | `attrs` is a flat `[name, value, ...]` array. Void elements self close                       |
+| `createElement`                                  | `(name: string, attrs: string[], ...children: string[]) => string` | kitajs shaped alias of `h`                                                                   |
+| `Fragment`                                       | `(kids: string[]) => string`                                       | Siblings without a wrapper                                                                   |
+| `html`                                           | tagged template                                                    | Escapes interpolations, static text is trusted markup                                        |
+| `raw`                                            | tagged template                                                    | No escaping, for composing already rendered markup                                           |
+| `BARE`                                           | `string`                                                           | Attribute value sentinel for bare boolean attributes                                         |
+| `isVoidElement`, `isValidTag`, `isValidAttrName` | `(s: string) => boolean`                                           | Exposed helpers                                                                              |
 
 ```ts
 import { CtxCore } from "@chttp/router";
@@ -58,6 +58,37 @@ Tag and attribute names are validated and throw, so they cannot be used for inje
 ## JSX in dev and tests
 
 `@chttp/html/jsx-runtime` (and `jsx-dev-runtime`) export `jsx`, `jsxs`, `Fragment` and a `JSX` namespace so `"jsx": "react-jsx"` with `"jsxImportSource": "@chttp/html"` works under Node. Output is produced by `h()`, so it is byte identical to the same tree written with `h`. JSX props map to attrs (`className` to `class`, `true` to a bare attribute, `false`, `null` and `undefined` skipped, `safe` honoured). This runtime is not in the subset and must never be imported by code that compiles to the ELF. Production builds will lower `.tsx` to plain `h`/`html` calls at build time (planned unplugin `jsx` slice).
+
+## Pages, SSG and ISR
+
+`@chttp/html` also ships the page-level surface of issue #14's slice: a document
+shell and a revalidate cache. Components stay plain `(props) => string`
+functions; there is no component class, virtual DOM, or client runtime.
+
+| Export               | Signature                                                      | Notes                                                                                      |
+| -------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `page`               | `(head: string, body: string) => string`                       | Full document: `<!doctype html>` + `<html><head>` + `<body>`. Args are markup, not escaped |
+| `IsrPage`            | `new IsrPage(render: () => string, revalidateSeconds: number)` | Caches `render()` output; re-renders on the first `html()` read after the window elapses   |
+| `IsrPage.html`       | `() => string`                                                 | The cached document                                                                        |
+| `IsrPage.freshUntil` | `() => number`                                                 | Epoch ms of the next re-render instant                                                     |
+
+**SSG** needs no API: call your component once at startup and serve the baked
+string from a route. **ISR** wraps a render function in `IsrPage` — revalidation
+is synchronous (Next.js blocking-fallback semantics); the reader that hits an
+expired window pays the render. There is no background refresh inside the
+subset. See `examples/pages` for a working app.
+
+```ts
+const index = Layout("posts", PostList(POSTS)); // once — SSG
+app.get("/", (c) => c.html(index));
+
+const post = new IsrPage(() => Layout("post", PostCard(loadPost())), 60); // ISR
+app.get("/post", (c) => c.html(post.html()));
+```
+
+This is a slice, not a framework: no per-request data loading, nested layouts,
+streaming, islands/hydration, or build-time prerender yet — see issue #14 for
+the remaining surface.
 
 ## Compile gate
 
