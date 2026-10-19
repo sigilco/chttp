@@ -202,3 +202,42 @@ export function raw(strings: TemplateStringsArray, ...vals: string[]): string {
   }
   return out;
 }
+
+// Full document shell: doctype + <html><head>head</head><body>body</body></html>.
+// head and body are pre-rendered markup, same contract as h() children.
+export function page(head: string, body: string): string {
+  return "<!doctype html>" + h("html", [], [h("head", [], [head]), h("body", [], [body])]);
+}
+
+// TTL-cached page markup (ISR semantics): render once, serve the cached string,
+// re-render lazily on the first read after the revalidate window expires.
+// Revalidation is synchronous like Next.js's blocking ISR fallback; there is no
+// background refresh inside the subset (no timers for cache work).
+export class IsrPage {
+  private readonly render: () => string;
+  private readonly seconds: number;
+  private body: string;
+  private until: number;
+
+  constructor(render: () => string, revalidateSeconds: number) {
+    this.render = render;
+    this.seconds = revalidateSeconds;
+    this.body = render();
+    this.until = Date.now() + revalidateSeconds * 1000;
+  }
+
+  // Cached markup; re-renders when the revalidate window has elapsed.
+  html(): string {
+    const now = Date.now();
+    if (now >= this.until) {
+      this.body = this.render();
+      this.until = now + this.seconds * 1000;
+    }
+    return this.body;
+  }
+
+  // Epoch ms at which the next read re-renders (for tests and Cache-Control math).
+  freshUntil(): number {
+    return this.until;
+  }
+}
