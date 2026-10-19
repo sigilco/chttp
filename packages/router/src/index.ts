@@ -372,8 +372,14 @@ export class ReqViewCore {
     const key = String(name).toLowerCase();
     // Read from the materialized _headers table. The Node path copies
     // `raw.headers` once at construction; the app.fetch path populates
-    // it from the captured Web Request's Headers.
-    const v = this._headers[key];
+    // it from the captured Web Request's Headers. Presence is probed with
+    // hasOwnProperty, never a bare index: under program-code compilation a
+    // missing typed-record key throws ("record has no key"), while packed
+    // dist tolerates the read — this is what fenced `If-None-Match` /
+    // `Accept-Encoding` lookups in single-graph (vendored) builds.
+    const v = Object.prototype.hasOwnProperty.call(this._headers, key)
+      ? this._headers[key]
+      : undefined;
     if (v !== undefined) {
       return String(v);
     }
@@ -383,7 +389,9 @@ export class ReqViewCore {
     // Headers are single-value, joined in copyHeaders' string arm).
     // d[0] === v[0] for Node joins, so the first-element read is
     // identical to the IncomingMessage semantics.
-    const d = this._headersDistinct[key];
+    const d = Object.prototype.hasOwnProperty.call(this._headersDistinct, key)
+      ? this._headersDistinct[key]
+      : undefined;
     if (d !== undefined && d.length > 0) {
       return String(d[0]);
     }
