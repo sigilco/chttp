@@ -22,6 +22,7 @@ SUBJECTS=(
   "chttp-bun|bun apps/chttp.ts|full|"
   "chttp-fetch-node|node apps/chttp-fetch.ts|full|"
   "chttp-fetch-bun|bun apps/chttp-fetch.ts|full|"
+  "chttp-fetch-lite-node|node apps/chttp-fetch-lite.ts|full|"
   "chttp-scriptc|./bin/chttp-scriptc|full|bin/chttp-scriptc"
   "chttp-elf-fetch|./bin/chttp-elf-fetch|full|bin/chttp-elf-fetch"
   "raw-node|node apps/raw.ts|full|"
