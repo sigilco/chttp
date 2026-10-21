@@ -1698,7 +1698,13 @@ export class App {
 
   route(prefix: string, sub: App): App {
     let p = String(prefix);
-    if (p.length > 1 && p.charAt(p.length - 1) === "/") {
+    // A "/" prefix mounts at the root (issue #97): mountRoutes concatenates
+    // prefix + sub-path verbatim, so "/" must collapse to "" instead of
+    // registering "//health"-style double-slash paths. Its empty-path guard
+    // then turns "" + "" into "/" for root handlers.
+    if (p === "/") {
+      p = "";
+    } else if (p.length > 1 && p.charAt(p.length - 1) === "/") {
       p = String(p.slice(0, p.length - 1));
     }
     mountRoutes(sub, this, p, copyMw(this._mw));
