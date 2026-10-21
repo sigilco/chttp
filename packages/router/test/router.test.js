@@ -313,6 +313,44 @@ test("route() mounts a sub-app under a prefix preserving params", () => {
   assert.equal(call(app, { url: "/api/" }).body, "subroot");
 });
 
+test('route("/", sub) mounts sub-app routes at the root (issue #97)', () => {
+  const sub = createRouter();
+  sub.get("/health", (c) => c.text("ok"));
+  const app = createRouter();
+  app.route("/", sub);
+  const res = call(app, { url: "/health" });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body, "ok");
+});
+
+test('route("/", sub) resolves a handler registered at "/" in the sub-app', () => {
+  const sub = createRouter();
+  sub.get("/", (c) => c.text("subroot"));
+  const app = createRouter();
+  app.route("/", sub);
+  const res = call(app, { url: "/" });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body, "subroot");
+});
+
+test('route("/", sub) preserves params through the root mount', () => {
+  const sub = createRouter();
+  sub.get("/item/:id", (c) => c.json({ id: c.req.param("id") }));
+  const app = createRouter();
+  app.route("/", sub);
+  assert.equal(JSON.parse(call(app, { url: "/item/7" }).body).id, "7");
+  assert.equal(call(app, { url: "/missing" }).statusCode, 404);
+});
+
+test('route("/api", sub) still mounts under the prefix after the root fix', () => {
+  const sub = createRouter();
+  sub.get("/users", (c) => c.text("users"));
+  const app = createRouter();
+  app.route("/api", sub);
+  assert.equal(call(app, { url: "/api/users" }).body, "users");
+  assert.equal(call(app, { url: "/users" }).statusCode, 404);
+});
+
 test("route() inherits middleware from both sides", () => {
   const hits = [];
   const sub = createRouter();
