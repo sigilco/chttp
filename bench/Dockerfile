@@ -22,7 +22,7 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
 # scriptc (the compiler under test)
-RUN npm i -g scriptc@0.3.1
+RUN npm i -g scriptc@0.4.7
 
 # wrk2 — second measurement tool (giltene/wrk2, built from source)
 RUN git clone --depth 1 https://github.com/giltene/wrk2 /opt/wrk2 \
