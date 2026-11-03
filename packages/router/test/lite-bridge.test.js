@@ -131,3 +131,39 @@ test("lite bridge: 405 carries Allow like the other surfaces", async () => {
   assert.match(r.headers.get("allow"), /GET/);
   srv.close();
 });
+
+test("lite bridge: adopted body stream pumps over the socket", async () => {
+  const app = createRouter();
+  app.post("/pump", () => {
+    // Deferred, multi-chunk body: the pump's reader.read().then callback
+    // must run once per chunk and then once for done, not just for a
+    // body that is already buffered when the response is adopted.
+    const rs = new ReadableStream({
+      start(ctl) {
+        setTimeout(() => {
+          ctl.enqueue(new TextEncoder().encode("b1,"));
+          ctl.enqueue(new TextEncoder().encode("b2"));
+          ctl.close();
+        }, 5);
+      },
+    });
+    return new Response(rs, {
+      status: 203,
+      headers: { "content-type": "text/plain" },
+    });
+  });
+  const { srv, base } = await serve(app);
+  const r = await fetch(base + "/pump", {
+    method: "POST",
+    body: new ReadableStream({
+      start(ctl) {
+        ctl.enqueue(new TextEncoder().encode("request-stream-body"));
+        ctl.close();
+      },
+    }),
+    duplex: "half",
+  });
+  assert.equal(r.status, 203);
+  assert.equal(await r.text(), "b1,b2");
+  srv.close();
+});
