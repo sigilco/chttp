@@ -1857,12 +1857,15 @@ export class App {
             const reader = b.getReader();
             const step = function (): void {
               reader.read().then(
-                function (v: ReadableStreamReadResult<Uint8Array>): void {
-                  if (v.done === true) {
+                // scriptc has no DOM lib, so this file names no DOM types:
+                // ReadableStreamReadResult is SC0001 via @chttp/router/src.
+                function (v: unknown): void {
+                  const rec = v as { done: boolean; value: Uint8Array };
+                  if (rec.done === true) {
                     res.end();
                     return;
                   }
-                  res.write(v.value);
+                  res.write(rec.value);
                   step();
                 },
                 function (): void {
