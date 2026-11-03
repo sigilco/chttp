@@ -15,7 +15,9 @@ Releases are packed and published with pnpm, never npm. Internal ranges are `wor
 
 ## What CI does
 
-The tag push triggers `.github/workflows/release.yml`. It verifies every package.json matches the tag, then publishes all packages with `pnpm -r publish` behind the `npm-publish` environment approval.
+The tag push triggers `.github/workflows/release.yml`. It verifies every package.json matches the tag, then publishes every package in `versioning.fixed` (all nine) one by one with `pnpm --filter <pkg> publish`, in dependency order, behind the `npm-publish` environment approval.
+
+The publish loop in `.github/workflows/release.yml` is hand-maintained. `node scripts/check-published-list.mjs` fails CI when it drifts from `versioning.fixed`, so a package added to the group cannot be silently left unpublished. Run it after editing either list.
 
 ## Retrying
 

@@ -46,6 +46,8 @@ jobs:
       - run: pnpm smoke:pack
       - name: Packed tarballs have no workspace ranges
         run: bash scripts/check-packed.sh
+      - name: Publish loop matches versioning.fixed
+        run: node scripts/check-published-list.mjs
       # Versioning is fixed-group (pnpm-workspace.yaml versioning.fixed):
       # every package shares one version, which must match the tag.
       - name: Verify tag matches package versions
@@ -94,7 +96,11 @@ jobs:
         run: |
           VER="${TAG#v}"
           published=""; skipped=""; failed=""
-          for name in router val unplugin static ws stream html; do
+          # Dependency order: @chttp/router and @chttp/val first (everything
+          # else peers on router, unplugin also peers on val), then the
+          # dependents. scripts/check-published-list.mjs fails CI if this
+          # list drifts from versioning.fixed in pnpm-workspace.yaml.
+          for name in router val unplugin static ws stream html auth mcp; do
             pkg="@chttp/$name"
             if npm view "$pkg@$VER" version >/dev/null 2>&1; then
               skipped="$skipped $pkg"; continue
