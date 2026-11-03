@@ -9,7 +9,7 @@
 - **Function-bearing records can't be class fields.** Registrations live in parallel arrays (`_toolNames`/`_toolValidate`/`_toolHandlers`/…); schemas themselves are never stored — `validatorFor` captures `schema["~standard"]` in a closure (which also preserves `this` for `@chttp/val`'s `StdProps.validate`), and emitted JSON Schemas are stored serialized as `string` (records can't nest).
 - **`crypto` global is `unknown` under scriptc** — use `import { randomUUID } from "node:crypto"`, wrapped in a closure (function values passed bare hit SC1090).
 - **`instanceof Error` is banned** — `errorFor`/`wrapToolError` read `.message` structurally.
-- **`new Request()` is not constructible under scriptc 0.3.x.** The transport only _consumes_ Requests (url/method/headers/body); the ELF smoke (`test/elf-smoke.ts`) exercises `handleRequest` + the SSE encoder via argv/stdout instead.
+- **`new Request()` compiles as of scriptc 0.4.6** (`Response.clone`/`Request.clone` on typed values landed there; construction and the url/method/headers/body reads probe-verified under 0.4.7). The transport still only _consumes_ Requests; the ELF smoke (`test/elf-smoke.ts`) still exercises `handleRequest` + the SSE encoder via argv/stdout instead.
 - **ReadableStream generics must be `<Uint8Array>`** — `ReadableStream<unknown>`/controller-typed class fields are refused; `SseSession` stores `push`/`end` function fields.
 - `scriptc coverage packages/mcp/gate.ts` must stay 100% — `scripts/scriptc-gate.sh` is the gate.
 - `pnpm --filter @chttp/mcp test` runs the node:test suite against the tsc build (`test/*.test.js`); `bash test/elf.test.sh` builds + runs the ELF smoke.
