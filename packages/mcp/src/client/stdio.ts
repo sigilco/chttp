@@ -201,4 +201,8 @@ export class StdioClientTransport extends ClientTransport {
     this._failAll(new JsonRpcError(INTERNAL_ERROR, "transport closed"));
     return Promise.resolve();
   }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.close();
+  }
 }
