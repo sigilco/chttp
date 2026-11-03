@@ -14,6 +14,6 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.0",
     "@types/node": "^24.0.0",
-    "scriptc": "0.3.1"
+    "scriptc": "0.4.7"
   }
 }
