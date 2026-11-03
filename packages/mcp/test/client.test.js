@@ -338,3 +338,32 @@ test("stdio request timeout rejects pending calls", async () => {
   await assert.rejects(c.connect(), /timed out|timeout/i);
   await c.close();
 });
+
+test("stdio transport [Symbol.asyncDispose] kills the spawned child", async () => {
+  const tr = new StdioClientTransport({
+    command: process.execPath,
+    args: ["-e", "setInterval(()=>{},1e9); process.stdout.write('ready\\n');"],
+  });
+  // Spawn and wait until the child is up before disposing.
+  await tr.request({ jsonrpc: "2.0", id: 1, method: "x" }, 5000).catch(() => {});
+  const proc = tr._proc;
+  assert.ok(proc, "child process spawned");
+  assert.equal(proc.killed, false);
+  const exited = new Promise((resolve) => proc.on("exit", resolve));
+  await tr[Symbol.asyncDispose]();
+  await exited;
+  assert.equal(tr._proc, null);
+});
+
+test("await using disposes the stdio transport", async () => {
+  let tr;
+  {
+    await using _t = new StdioClientTransport({
+      command: process.execPath,
+      args: ["-e", "setInterval(()=>{},1e9)"],
+    });
+    tr = _t;
+    await tr.request({ jsonrpc: "2.0", id: 1, method: "x" }, 5000).catch(() => {});
+  }
+  assert.equal(tr._proc, null);
+});
