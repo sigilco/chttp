@@ -3,6 +3,14 @@
 ## Unreleased
 
 <!-- release:start -->
+## 0.4.1
+
+### Fixes
+
+- **@chttp/router:** Type the adopted-body read callback as unknown and narrow instead of naming DOM ReadableStreamReadResult, so scriptc typechecks the router when a program reaches it through @chttp/router/src
+- **@chttp/router:** fix(router): `route("/", sub)` now mounts the sub-app at the root instead of registering double-slash paths (`//health`) that 404 on every request. A `"/"` prefix collapses to `""` before `mountRoutes` concatenation, matching Hono behavior.
+<!-- release:end -->
+
 ## 0.4.0
 
 ### Features
@@ -23,7 +31,6 @@
 - **@chttp/router:** fix(req): `c.req.header(name)` no longer crashes on absent headers in single-graph (vendored/program-code) scriptc builds — `_headers`/`_headersDistinct` are probed with `hasOwnProperty` before indexing instead of a bare record read that throws "record has no key".
 - **@chttp/router, @chttp/unplugin:** empty-body responses send no content-type (Hono parity); default text/plain charset is UTF-8
 - **@chttp/static:** Add an end-to-end ELF smoke (serve + SPA + embedded) so runtime-only fences on older scriptc versions can't slip through
-<!-- release:end -->
 
 ## 0.3.0
 
