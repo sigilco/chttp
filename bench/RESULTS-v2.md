@@ -740,3 +740,90 @@ RSS after 100k reqs / cold start (median of 10): chttp-node 118 MB /
 - **Residual ~6%**: `LiteRequest`/`LiteResponse` still build a header
   record + object per request, and the fetch-arm chain runner allocates
   the ReqView/Ctx pair on Node-arm-shaped paths; `app.handler` skips both.
+
+## scriptc 0.4.7 pin — re-baseline STATUS (2026-11-03)
+
+The scriptc pin moved `0.3.6` → `0.4.7` (exact; the native runtime ABI moved
+v22 → v48 across the 0.4.x line, so every gate and ELF rebuilds). The bench
+**has not been re-baselined on the canonical rig** — see "Blocked" below. What
+follows is what was actually measured, and an A/B that answers the one
+question that can be answered off-rig.
+
+### Blocked: canonical re-baseline
+
+`bench/RESULTS-v2.md`'s numbers were measured on the rig in `ENV.md`: an
+8-vCPU KVM Linux guest, client and server sharing all 8 cores over loopback,
+with ±50% run-to-run variance disclosed. That rig was not available here.
+The repro path (`bench/Dockerfile`, `docker compose -f bench/docker-compose.yml
+up --build`) is the sanctioned way to produce comparable numbers, and Docker is
+not installed on this machine. `wrk2` (the fixed-rate cross-validation pass,
+`bench/run-latency.sh`) is also absent, so **no wrk2 rows could be produced**.
+
+**A maintainer must still run, on the ENV.md rig or via the Docker repro:**
+
+```bash
+docker compose -f bench/docker-compose.yml up --build   # or bench/Dockerfile
+node lib/render-results.mjs > RESULTS-v2.md
+```
+
+The `bench/Dockerfile` scriptc pin is updated to `0.4.7` in the same change, so
+the image builds the bench ELFs with the new compiler. Until that run lands,
+the 2026-10-11 matrix above remains the baseline of record.
+
+### Measured here: scriptc-affected subjects (Apple Silicon macOS, contended host)
+
+Autocannon `-c64 -d6`, median of 3, `bash bench/run.sh <subject>`. Subjects
+built from the current tree with scriptc **0.4.7** (`--optimization=speed`,
+program-code, as `RESULTS-v2.md` provenance requires). `raw-node` and
+`raw-scriptc` are the ratio bases.
+
+| subject | json | user | echo64 | echo1k | deep | files | missing | mixed |
+|---|---|---|---|---|---|---|---|---|
+| chttp-scriptc | 47,823 | 41,887 | 34,659 | 36,352 | 62,720 | 65,107 | 65,349 | 49,445 |
+| raw-scriptc | 94,741 | 92,128 | 83,584 | 90,517 | 93,408 | 88,757 | 92,363 | 85,771 |
+| raw-node | 99,691 | 100,992 | 85,547 | 78,595 | 106,869 | 108,096 | 96,760 | 98,251 |
+| chttp-node | 91,648 | 86,016 | 74,613 | 62,997 | 90,133 | 84,736 | 75,832 | 71,723 |
+| chttp-elf-fetch | 78,293 | 80,181 | 81,536 | 35,446 | 33,663 | 63,128 | 31,327 | 61,275 |
+
+`chttp-scriptc` cold start **14 ms** (median of 10), **4 MB** RSS after 100k
+reqs, **3.2 MB** binary. `raw-scriptc` cold start 10 ms, 2 MB RSS, 0.5 MB
+binary.
+
+**These absolutes are NOT comparable to the 2026-10-11 matrix.** The host here
+was a shared, heavily loaded Apple Silicon laptop (load average 8.3–13.75 on
+8 cores, with other agents' build and test processes running throughout), not
+the ENV.md KVM guest. The absolute ratios are depressed accordingly
+(`chttp-scriptc` reads 0.41–0.68× raw-node here versus 1.08–1.76× on the rig).
+Per ENV.md, ratios are the comparable quantity — and the ratio to
+`raw-scriptc` is depressed here too (0.40–0.73×), which says the rig, not the
+router, is what moved.
+
+### A/B: is 0.4.7 slower than 0.3.6? (no)
+
+The rig being unavailable does not block the question that motivated the
+re-baseline: did the 0.3.6 → 0.4.7 jump cost throughput? Answered by
+building the **same** `bench/apps/chttp.ts` with both compilers and running
+them interleaved (reps alternating, so host drift hits both equally):
+
+| subject | json (median of 3) | user | echo64 |
+|---|---|---|---|
+| `chttp` built with scriptc 0.3.6 | 49,317 | 42,132 | 33,884 |
+| `chttp` built with scriptc 0.4.7 | 48,784 | 52,379 | 33,371 |
+
+Throughput is **indistinguishable** (json within 1%; the `user` cell favours
+0.4.7 by 24%, which is inside the host's own spread). For scale, `raw-node`
+measured 43,497–84,811 rps across three reps of the same cell on this host —
+±49% run-to-run, matching ENV.md's disclosed noise. No 0.4.7 throughput
+regression is detectable.
+
+Binary size did grow: the same app is **2.6 MB under 0.3.6** and **3.2 MB
+under 0.4.7** (+23%). `raw-scriptc` is 0.5 MB under 0.4.7. Consistent with
+the 0.4.7 changelog note that the runtime pack changed (smaller on Linux x64).
+
+### Coverage is unchanged
+
+`scriptc coverage bench/apps/chttp.ts` reports **1724/1724 (100%)** compile
+statically under 0.4.7, and all eleven gates in `scripts/scriptc-gate.sh`
+stay at 100% static. The 0.4.6 changelog change to what `scriptc coverage`
+measures (Node islands auto, SC8001 a note rather than a fence) did not move
+this repo's 100% static gate.
