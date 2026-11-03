@@ -1,5 +1,13 @@
 # @chttp/router
 
+## 0.4.1
+
+### Patch Changes
+
+- Type the adopted-body read callback as unknown and narrow instead of naming DOM ReadableStreamReadResult, so scriptc typechecks the router when a program reaches it through @chttp/router/src
+
+- fix(router): `route("/", sub)` now mounts the sub-app at the root instead of registering double-slash paths (`//health`) that 404 on every request. A `"/"` prefix collapses to `""` before `mountRoutes` concatenation, matching Hono behavior.
+
 ## 0.4.0
 
 ### Minor Changes

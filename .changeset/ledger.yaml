@@ -43,6 +43,11 @@
     - soft-grapes-dig
     - typed-client
     - ws-handshake-hardening
+"@chttp/router@0.4.1":
+  dir: packages/router
+  intents:
+    - pretty-jobs-train
+    - router-root-mount
 "@chttp/static@0.2.0":
   dir: packages/static
   intents:
