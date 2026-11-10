@@ -73,4 +73,29 @@ printf '%s\n' "$res" | grep -q 'progress: notifications/progress' \
 printf '%s\n' "$res" | grep -q 'elf-client-smoke OK' \
   || fail "client smoke end: $res"
 
+# ---------- stdio transport smoke ----------
+
+OUTS="${TMPDIR:-/tmp}/chttp-mcp-elf-stdio-smoke"
+"$BIN" build "$PKG/test/elf-stdio-smoke.ts" -o "$OUTS" >/dev/null \
+  || fail "scriptc build (stdio)"
+echo "build OK (stdio)"
+
+res=$(printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"hi":7}}}' \
+  '{bad json' \
+  '{"jsonrpc":"2.0","id":3,"method":"bogus/method"}' \
+  | timeout 15 "$OUTS")
+printf '%s\n' "$res" | grep -q '"serverInfo":{"name":"elf-stdio"' \
+  || fail "stdio initialize: $res"
+printf '%s\n' "$res" | grep -q 'echo:{' \
+  || fail "stdio tools/call: $res"
+printf '%s\n' "$res" | grep -q '"code":-32700' \
+  || fail "stdio parse error: $res"
+printf '%s\n' "$res" | grep -q '"code":-32601' \
+  || fail "stdio unknown method: $res"
+[ "$(printf '%s\n' "$res" | wc -l | tr -d ' ')" = "4" ] \
+  || fail "stdio: expected 4 response lines (notification is silent): $res"
+
 echo "elf.test OK"

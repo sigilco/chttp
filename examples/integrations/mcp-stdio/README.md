@@ -9,4 +9,4 @@ node --experimental-strip-types examples/integrations/mcp-stdio/main.ts <<'EOF'
 EOF
 ```
 
-v1 intentionally does not ship a `StdioTransport` class — the `Transport` interface is the contract; this file shows the ~40 lines of glue a stdio app needs. A packaged stdio transport (buffered progress, binary-safe framing) is a v2 candidate.
+The wiring is `StdioTransport` from `@chttp/mcp`; see [docs/transport.md](../../../packages/mcp/docs/transport.md). Responses can arrive out of order, so match on `id`.
