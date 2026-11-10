@@ -24,6 +24,7 @@ Helpers write at statement level and return `c` for chaining. After one runs, th
 
 ```ts
 c.json({ ok: true });
+c.rawJson('{"already":"serialised"}'); // JSON string sent as-is, no stringify pass
 c.text("plain");
 c.html("<h1>hi</h1>");
 c.bytes(new Uint8Array([0xff, 0xd8]), "image/jpeg"); // binary body

@@ -111,6 +111,17 @@ test("static route matches and json writes headers + body", () => {
   assert.equal(res.headers["content-length"], String(Buffer.byteLength(res.body)));
 });
 
+test("rawJson sends a pre-serialised JSON string untouched", () => {
+  const app = createRouter();
+  const doc = '{"a":1,"b":[true,null]}';
+  app.get("/raw", (c) => c.status(201).rawJson(doc));
+  const res = call(app, { url: "/raw" });
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.headers["content-type"], "application/json; charset=utf-8");
+  assert.equal(res.body, doc);
+  assert.equal(res.headers["content-length"], String(Buffer.byteLength(doc)));
+});
+
 test("param route captures and param() returns value", () => {
   const app = createRouter();
   app.get("/user/:id", (c) => c.json({ id: c.req.param("id") }));

@@ -635,6 +635,13 @@ export class CtxCore {
     return this._send(s, "application/json; charset=utf-8");
   }
 
+  // Sends an already-serialised JSON document as-is (no JSON.stringify pass):
+  // for bodies built by hand or by a native JSON serialiser. The caller owns
+  // validity; `c.json` is the checked path.
+  rawJson(s: string): CtxCore {
+    return this._send(String(s), "application/json; charset=utf-8");
+  }
+
   text(s: string): CtxCore {
     return this._send(String(s), "text/plain; charset=UTF-8");
   }
