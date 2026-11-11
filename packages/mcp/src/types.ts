@@ -83,7 +83,8 @@ export interface JsonRpcErrorObject {
 
 export interface JsonRpcResponse {
   jsonrpc: "2.0";
-  id: RequestId;
+  // null on parse/shape failures (JSON-RPC 2.0 section 5).
+  id: RequestId | null;
   result?: unknown;
   error?: JsonRpcErrorObject;
 }
@@ -264,7 +265,7 @@ export interface Transport {
   handleRequest(req: JsonRpcRequest): Promise<JsonRpcResponse | null>;
   // SSE progress sink: called when a tool wants to emit progress. The
   // transport decides whether to actually push (HTTP+SSE), buffer, or no-op
-  // (stdio in v1 — no async feedback channel).
+  // (stdio writes the frame as a line on stdout).
   pushProgress?(sessionId: string | null, notification: JsonRpcRequest): Promise<void>;
   // Optional: shut down the transport (HTTP server close, stdio flush).
   close?(): Promise<void>;

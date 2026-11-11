@@ -51,6 +51,8 @@ export { encodeSseComment, encodeSseEvent, encodeSseRetry } from "./transport/ss
 
 export { SseSession, StreamableHttpTransport } from "./transport/http.ts";
 
+export { StdioTransport } from "./transport/stdio.ts";
+
 export type { Transport } from "./transport/stdio.ts";
 
 export type {

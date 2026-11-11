@@ -79,9 +79,8 @@ export function errorResponse(
     data === undefined
       ? { code: code, message: message }
       : { code: code, message: message, data: data };
-  // JSON-RPC answers parse/shape failures on `"id": null`; the cast keeps the
-  // public id type at RequestId while emitting spec-correct null on the wire.
-  const r = { jsonrpc: "2.0" as const, id: id, error: e } as JsonRpcResponse;
+  // JSON-RPC answers parse/shape failures on `"id": null`.
+  const r: JsonRpcResponse = { jsonrpc: "2.0", id: id, error: e };
   return r;
 }
 

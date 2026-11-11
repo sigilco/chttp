@@ -24,6 +24,7 @@ import {
   runStdValidate,
   Server,
   SseSession,
+  StdioTransport,
   StreamableHttpTransport,
   tool,
   validatorFor,
@@ -163,6 +164,20 @@ export async function main(): Promise<string> {
     const res = await server.handleRequest(req);
     out.push(res === null ? "null" : JSON.stringify(res));
   }
+
+  // stdio transport: the pure line core plus the readline glue (serve is
+  // referenced, not run: it would block on stdin).
+  const stdio = new StdioTransport(server);
+  const stdioLine = await stdio.handleLine(reqs[0]);
+  const stdioBad = await stdio.handleLine("{bad");
+  const stdioReq = await stdio.handleRequest(parseBody(reqs[0]));
+  await stdio.pushProgress(null, progressNotification("t", 1, 2, null));
+  const serveFn = function (): Promise<void> {
+    return stdio.serve();
+  };
+  void serveFn;
+  await stdio.close();
+  out.push(String(stdioLine) + String(stdioBad) + JSON.stringify(stdioReq));
 
   // Transport surfaces (Request consumption only — constructing one is a
   // Node-side concern; the ELF smoke drives handleRequest + SSE directly).
