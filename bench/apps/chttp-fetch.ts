@@ -42,6 +42,7 @@ app.get("/cookies", (c) => {
 app.get("/", (c) => c.text(""));
 app.get("/hello", (c) => c.text("Hello World!"));
 app.get("/json", (c) => c.json({ hello: "world" }));
+app.get("/raw-json", (c) => c.rawJson('{"hello":"world"}'));
 app.get("/user/:id", (c) => c.json({ id: c.req.param("id") }));
 app.post("/echo", (c) => c.text(c.req.body()), { body: true });
 app.post("/user", (c) => c.text(""));
