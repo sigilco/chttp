@@ -1,6 +1,6 @@
 {
   "name": "@chttp/val",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Minimal Standard Schema validation library authored inside the scriptc compilable subset",
   "license": "Apache-2.0",
   "repository": {
