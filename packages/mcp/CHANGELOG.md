@@ -1,5 +1,16 @@
 # @chttp/mcp
 
+## 0.5.0
+
+### Minor Changes
+
+- Add `StdioTransport` (line-delimited JSON-RPC over stdin/stdout, with progress frames and a pure `handleLine` core) and make `JsonRpcResponse.id` nullable so parse-error envelopes on `id: null` no longer abort inside a scriptc build.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @chttp/router@0.5.0
+
 ## 0.4.1
 
 ## 0.4.0
