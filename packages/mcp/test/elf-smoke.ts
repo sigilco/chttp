@@ -4,7 +4,7 @@
 // then prints an SSE progress frame — end-to-end proof that dispatch,
 // validation, wrapping, and the SSE encoder all lower and run natively.
 
-import { encodeSseEvent, parseBody, progressNotification, Server } from "../src/index.ts";
+import { encodeSseEvent, errorFor, parseBody, progressNotification, Server } from "../src/index.ts";
 import type { StandardSchemaV1 } from "../src/index.ts";
 
 function echoSchema(): StandardSchemaV1 {
@@ -37,6 +37,17 @@ server.tool(
 );
 
 const raw: string = process.argv.length > 2 ? process.argv[2] : "";
+// "envelope" mode answers a parse failure on id null instead of throwing
+// (the shape every transport sends); it aborted before JsonRpcResponse.id
+// admitted null.
+if (process.argv.length > 3 && process.argv[3] === "envelope") {
+  try {
+    parseBody(raw);
+  } catch (e) {
+    console.log(JSON.stringify(errorFor(null, e)));
+    process.exit(0);
+  }
+}
 const req = parseBody(raw);
 const res = await server.handleRequest(req);
 if (res === null) {

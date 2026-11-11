@@ -273,7 +273,7 @@ function decomposeChain(p: Parser, e: Expression): { root: string; calls: ChainC
 // ---- static-send specialization ------------------------------------------
 // A handler shaped `(c) => c.<chain>` where the chain is only
 // status(number)/header(string, string) steps ending in
-// json(lit)/text(lit)/html(lit)/redirect(str[,num]) can be answered without
+// json(lit)/rawJson(str)/text(lit)/html(lit)/redirect(str[,num]) can be answered without
 // building a Ctx at all.
 
 function detectStaticSend(p: Parser, h: Expression): StaticSend | null {
@@ -352,13 +352,20 @@ function detectStaticSend(p: Parser, h: Expression): StaticSend | null {
       }
       send.contentType = "application/json; charset=utf-8";
       send.body = t;
-    } else if ((op.name === "text" || op.name === "html") && op.args.length === 1) {
+    } else if (
+      (op.name === "text" || op.name === "html" || op.name === "rawJson") &&
+      op.args.length === 1
+    ) {
       const v = evalString(p, op.args[0]);
       if (!v.ok) {
         return null;
       }
       send.contentType =
-        op.name === "text" ? "text/plain; charset=UTF-8" : "text/html; charset=utf-8";
+        op.name === "text"
+          ? "text/plain; charset=UTF-8"
+          : op.name === "html"
+            ? "text/html; charset=utf-8"
+            : "application/json; charset=utf-8";
       send.body = v.v;
     } else if (op.name === "redirect" && op.args.length >= 1 && op.args.length <= 2) {
       const u = evalString(p, op.args[0]);

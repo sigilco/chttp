@@ -46,6 +46,12 @@ if "$OUT" '{bad json' 2>/dev/null; then
   fail "malformed JSON should exit non-zero"
 fi
 
+res=$("$OUT" '{bad json' envelope) || fail "parse error envelope exit"
+printf '%s\n' "$res" | grep -q '"id":null' \
+  || fail "parse error should answer on id null: $res"
+printf '%s\n' "$res" | grep -q '"code":-32700' \
+  || fail "parse error code: $res"
+
 # ---------- client smoke (socket HTTP transport inside the ELF) ----------
 
 OUTC="${TMPDIR:-/tmp}/chttp-mcp-elf-client-smoke"

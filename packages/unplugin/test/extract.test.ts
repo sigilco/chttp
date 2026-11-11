@@ -53,6 +53,7 @@ app.post('/made', (c) => c.status(201).header('x-a', 'b').json({ ok: true }))
 app.get('/redir', (c) => c.redirect('/json'))
 app.get('/redir2', (c) => c.redirect('/x', 301))
 app.get('/t', (c) => c.text('plain'))
+app.get('/raw', (c) => c.status(201).rawJson('{"a":1}'))
 `,
     );
     const made = m.routes[0].staticSend;
@@ -68,6 +69,11 @@ app.get('/t', (c) => c.text('plain'))
     const r2 = m.routes[2].staticSend;
     assert.equal(r2?.status, 301);
     assert.equal(m.routes[3].staticSend?.body, "plain");
+    const raw = m.routes[4].staticSend;
+    assert.ok(raw);
+    assert.equal(raw.status, 201);
+    assert.equal(raw.contentType, "application/json; charset=utf-8");
+    assert.equal(raw.body, '{"a":1}');
   });
 
   it("decomposes fluent chains and app.on", () => {
