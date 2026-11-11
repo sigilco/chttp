@@ -3,13 +3,25 @@
 ## Unreleased
 
 <!-- release:start -->
+## 0.5.0
+
+### Features
+
+- **@chttp/mcp:** Add `StdioTransport` (line-delimited JSON-RPC over stdin/stdout, with progress frames and a pure `handleLine` core) and make `JsonRpcResponse.id` nullable so parse-error envelopes on `id: null` no longer abort inside a scriptc build.
+- **@chttp/mcp:** Add `Symbol.asyncDispose` to `StdioClientTransport` so it works with `await using`; it delegates to `close()`, matching `Client` and `StreamableHttpTransport`.
+- **@chttp/router:** Add `c.rawJson(s)` to send an already-serialised JSON string with `application/json` and a content-length, skipping the stringify pass.
+
+### Fixes
+
+- **@chttp/unplugin:** Answer `c.rawJson('<literal>')` handlers from the static-send fast path, like `c.json`, `c.text` and `c.html` literals.
+<!-- release:end -->
+
 ## 0.4.1
 
 ### Fixes
 
 - **@chttp/router:** Type the adopted-body read callback as unknown and narrow instead of naming DOM ReadableStreamReadResult, so scriptc typechecks the router when a program reaches it through @chttp/router/src
 - **@chttp/router:** fix(router): `route("/", sub)` now mounts the sub-app at the root instead of registering double-slash paths (`//health`) that 404 on every request. A `"/"` prefix collapses to `""` before `mountRoutes` concatenation, matching Hono behavior.
-<!-- release:end -->
 
 ## 0.4.0
 

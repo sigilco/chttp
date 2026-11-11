@@ -1,5 +1,11 @@
 # @chttp/router
 
+## 0.5.0
+
+### Minor Changes
+
+- Add `c.rawJson(s)` to send an already-serialised JSON string with `application/json` and a content-length, skipping the stringify pass.
+
 ## 0.4.1
 
 ### Patch Changes

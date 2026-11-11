@@ -16,6 +16,11 @@
     - move-auth-mcp-in
     - soft-kings-repeat
     - val-std-schema-compat
+"@chttp/mcp@0.5.0":
+  dir: packages/mcp
+  intents:
+    - calm-pipes-listen
+    - tidy-pipes-dispose
 "@chttp/router@0.2.0":
   dir: packages/router
   intents:
@@ -48,6 +53,10 @@
   intents:
     - pretty-jobs-train
     - router-root-mount
+"@chttp/router@0.5.0":
+  dir: packages/router
+  intents:
+    - brave-docs-send
 "@chttp/static@0.2.0":
   dir: packages/static
   intents:
@@ -81,6 +90,10 @@
   intents:
     - clever-sheep-taste
     - silent-camels-smell
+"@chttp/unplugin@0.5.0":
+  dir: packages/unplugin
+  intents:
+    - quick-raw-static
 "@chttp/val@0.2.0":
   dir: packages/val
   intents:
